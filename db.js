@@ -245,7 +245,7 @@ class HamdDB {
 
   // ── DEMO DATA SEED ──
   async _seedDemoData() {
-    const count = await this.count('tenants');
+    const count = await this.count('users');
     if (count > 0) return; // Already seeded
 
     // Tenants
