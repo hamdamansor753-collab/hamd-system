@@ -1,0 +1,46 @@
+{
+  "name": "H.A.M.D - نظام إدارة المخازن",
+  "short_name": "H.A.M.D",
+  "description": "نظام احترافي متكامل لإدارة المخازن والمبيعات والمشتريات والحسابات",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["business", "productivity", "finance"],
+  "screenshots": [],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='24' fill='%236366f1'/><text x='96' y='130' text-anchor='middle' font-size='72' fill='white' font-family='Arial'>H</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='64' fill='%236366f1'/><text x='256' y='340' text-anchor='middle' font-size='200' fill='white' font-family='Arial'>H</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "نقطة البيع",
+      "short_name": "POS",
+      "description": "فتح شاشة البيع السريع",
+      "url": "/index.html#pos",
+      "icons": []
+    },
+    {
+      "name": "المخزون",
+      "short_name": "مخزون",
+      "description": "عرض المخزون الحالي",
+      "url": "/index.html#inventory",
+      "icons": []
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": []
+}
