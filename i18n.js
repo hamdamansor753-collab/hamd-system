@@ -1,5 +1,6 @@
 const i18n = {
   ar: {
+    search_name_barcode: "بحث بالاسم أو الباركود...",
     dashboard: "لوحة التحكم",
     inventory: "المخزون",
     products: "الأصناف",
@@ -262,6 +263,7 @@ const i18n = {
     offline: "أوفلاين",
   },
   en: {
+    search_name_barcode: "Search by name or barcode...",
     dashboard: "Dashboard",
     inventory: "Inventory",
     products: "Products",
@@ -526,9 +528,20 @@ const i18n = {
 
   t(key) {
     const lang = document.documentElement.lang || localStorage.getItem('hamd_lang') || 'ar';
-    // Fallback if missing
-    if (!this[lang]) return key;
-    return this[lang][key] || key;
+    // BUG FIX: this used to return the raw `key` string itself whenever a
+    // translation was missing (e.g. t('search_name_barcode') returned the
+    // literal text "search_name_barcode" to real users). Because the app
+    // has ~15+ call sites written as `t('some_key') || 'نص احتياطي'`, that
+    // never let the intended Arabic fallback kick in either, since the key
+    // string is always truthy. Now returns '' when missing, so both the
+    // hardcoded fallbacks work AND a stray missing key never leaks
+    // internal identifiers into the UI. Still logs a console warning so
+    // missing keys stay visible to developers.
+    if (!this[lang] || !this[lang][key]) {
+      console.warn(`[i18n] missing translation key: "${key}" (lang: ${lang})`);
+      return '';
+    }
+    return this[lang][key];
   },
 
   translateDOM() {

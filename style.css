@@ -437,7 +437,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 
 /* ── TABLES ── */
-.table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); border: 1px solid var(--border); }
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  position: relative;
+}
 /* MOBILE FIX: width:100% alone lets the browser squeeze every column to
    fit the narrow screen instead of triggering the wrapper's horizontal
    scroll - which is exactly why columns/data looked cut off or missing on
@@ -727,6 +733,22 @@ input:checked + .slider::before { transform: translateX(-20px); background: whit
 @media (max-width: 1024px) {
   :root { --sidebar-width: 240px; }
   .charts-grid { grid-template-columns: 1fr; }
+
+  /* MOBILE FIX: on phones the table is now wider than the screen
+     (min-width: 640px, see .table above) so users can swipe to see
+     remaining columns - but nothing told them that was possible, so a
+     cut-off column just looked like missing data. This fade hints "more
+     content this way" instead of a hard, confusing edge. Desktop is
+     unaffected since this rule only applies below 1024px. */
+  .table-wrapper { position: relative; }
+  .table-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 24px;
+    background: linear-gradient(to left, transparent, var(--bg-surface) 85%);
+    pointer-events: none;
+  }
   .pos-layout { display: flex; flex-direction: column; height: auto; gap: 16px; }
   .pos-products { max-height: 400px; overflow-y: auto; }
   .pos-cart { height: 480px; }
