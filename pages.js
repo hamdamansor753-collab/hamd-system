@@ -530,11 +530,12 @@ const Pages = {
         notes: '',
         userId: App.state.user.id,
       };
-      const savedInvoice = await window.db.add('invoices', invoice);
+      const savedInvoiceId = await window.db.add('invoices', invoice);
+      invoice.id = savedInvoiceId;
       // Save items & update stock
       for (const item of window._posCart) {
         await window.db.add('invoiceItems', {
-          tenantId, invoiceId: savedInvoice.id || invoice.id,
+          tenantId, invoiceId: savedInvoiceId,
           productId: item.productId, qty: item.qty,
           price: item.price, discount: 0, total: item.total,
         });
