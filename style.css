@@ -437,8 +437,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 
 /* ── TABLES ── */
-.table-wrapper { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
-.table { width: 100%; border-collapse: collapse; }
+.table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); border: 1px solid var(--border); }
+/* MOBILE FIX: width:100% alone lets the browser squeeze every column to
+   fit the narrow screen instead of triggering the wrapper's horizontal
+   scroll - which is exactly why columns/data looked cut off or missing on
+   phones. min-width forces the table to keep a readable layout and
+   overflow into a horizontal scrollbar instead. */
+.table { width: 100%; min-width: 640px; border-collapse: collapse; }
 .table th {
   background: var(--bg-elevated);
   padding: 12px 16px;
