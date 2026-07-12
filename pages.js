@@ -1180,7 +1180,7 @@ const Pages = {
         </div>
         <div class="table-wrapper">
           <table class="table" id="supp-table">
-            <thead><tr><th>${t('code')}</th><th>${t('name')}</th><th>${t('phone')}</th><th>${t('address')}</th><th>${t('balance')}</th><th>${t('status')}</th><th>${t('actions')}</th></tr></thead>
+            <thead><tr><th>${t('code')}</th><th>${t('name')}</th><th>${t('phone')}</th><th>${t('address')}</th><th>${t('balance')}</th><th>${t('credit_limit') || 'الحد الائتماني'}</th><th>${t('status')}</th><th>${t('actions')}</th></tr></thead>
             <tbody>
               ${suppliers.map(s => `
                 <tr data-name="${s.name}" data-code="${s.code||''}" data-phone="${s.phone||''}">
@@ -1188,7 +1188,10 @@ const Pages = {
                   <td><strong>${s.name}</strong></td>
                   <td dir="ltr">${s.phone||'—'}</td>
                   <td>${s.address||'—'}</td>
-                  <td>${Fmt.currency(s.balance||0)}</td>
+                  <td class="${(s.balance||0)>0 ? 'text-danger' : ((s.balance||0)<0 ? 'text-success' : '')}">
+                    ${Fmt.currency(s.balance||0)}
+                  </td>
+                  <td>${Fmt.currency(s.creditLimit||0)}</td>
                   <td><span class="badge ${s.active?'badge-success':'badge-secondary'}">${s.active?t('active'):t('inactive')}</span></td>
                   <td><div class="actions">
                     <button class="btn btn-secondary btn-sm" onclick="Pages.supplierForm('${s.id}')"><i class="fa fa-edit"></i></button>
@@ -1216,9 +1219,12 @@ const Pages = {
         </div>
         <div class="form-row cols-2">
           <div class="form-group"><label class="form-label">${t('phone')}</label><input type="tel" class="form-control" name="phone" value="${v.phone||''}" dir="ltr"></div>
-          <div class="form-group"><label class="form-label">${t('opening_balance')}</label><input type="number" class="form-control" name="balance" value="${v.balance||0}" step="0.01"></div>
+          <div class="form-group"><label class="form-label">${t('address')}</label><input type="text" class="form-control" name="address" value="${v.address||''}"></div>
         </div>
-        <div class="form-group"><label class="form-label">${t('address')}</label><input type="text" class="form-control" name="address" value="${v.address||''}"></div>
+        <div class="form-row cols-2">
+          <div class="form-group"><label class="form-label">${t('opening_balance')}</label><input type="number" class="form-control" name="balance" value="${v.balance||0}" step="0.01"></div>
+          <div class="form-group"><label class="form-label">${t('credit_limit') || 'الحد الائتماني'}</label><input type="number" class="form-control" name="creditLimit" value="${v.creditLimit||0}" min="0"></div>
+        </div>
         <div class="modal-footer" style="padding:0;margin-top:16px">
           <button type="button" class="btn btn-secondary" onclick="Modal.close('supplier-form')">${t('cancel')}</button>
           <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> ${t('save')}</button>
@@ -1234,6 +1240,7 @@ const Pages = {
     const data = Object.fromEntries(fd.entries());
     data.tenantId = App.state.tenant.id;
     data.balance = parseFloat(data.balance) || 0;
+    data.creditLimit = parseFloat(data.creditLimit) || 0;
     data.active = true;
     if (supplierId) { data.id = supplierId; await window.db.put('suppliers', data); }
     else { await window.db.add('suppliers', data); }
@@ -2093,16 +2100,16 @@ const Pages = {
 
       // Suppliers Sheet
       const suppliersData = [
-        ["الاسم", "الهاتف", "العنوان", "الرقم الضريبي"],
-        ["شركة التوريد العالمية", "0123456789", "القاهرة، مصر", "123456789"]
+        ["الاسم", "الهاتف", "العنوان", "الرقم الضريبي", "الرصيد الافتتاحي", "الحد الائتماني"],
+        ["شركة التوريد العالمية", "0123456789", "العنوان التجاري 1", "123456789", 5000, 20000]
       ];
       const wsSuppliers = XLSX.utils.aoa_to_sheet(suppliersData);
       XLSX.utils.book_append_sheet(wb, wsSuppliers, "الموردين");
 
       // Customers Sheet
       const customersData = [
-        ["الاسم", "الهاتف", "العنوان"],
-        ["العميل المثالي", "0987654321", "الرياض، السعودية"]
+        ["الاسم", "الهاتف", "العنوان", "الرصيد الافتتاحي", "الحد الائتماني"],
+        ["العميل المثالي", "0987654321", "العنوان السكني 1", 1500, 10000]
       ];
       const wsCustomers = XLSX.utils.aoa_to_sheet(customersData);
       XLSX.utils.book_append_sheet(wb, wsCustomers, "العملاء");
@@ -2143,6 +2150,9 @@ const Pages = {
               name,
               phone: row["الهاتف"]?.toString().trim() || '',
               address: row["العنوان"]?.toString().trim() || '',
+              balance: parseFloat(row["الرصيد الافتتاحي"]) || 0,
+              creditLimit: parseFloat(row["الحد الائتماني"]) || 0,
+              active: true,
               date: new Date().toISOString()
             };
             await window.db.add('customers', customer);
@@ -2164,6 +2174,9 @@ const Pages = {
               phone: row["الهاتف"]?.toString().trim() || '',
               address: row["العنوان"]?.toString().trim() || '',
               taxNumber: row["الرقم الضريبي"]?.toString().trim() || '',
+              balance: parseFloat(row["الرصيد الافتتاحي"]) || 0,
+              creditLimit: parseFloat(row["الحد الائتماني"]) || 0,
+              active: true,
               date: new Date().toISOString()
             };
             await window.db.add('suppliers', supplier);
