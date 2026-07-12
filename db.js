@@ -26,6 +26,7 @@ class HamdDB {
           firebase.initializeApp(firebaseConfig);
         }
         this.db = firebase.firestore();
+        this.auth = firebase.auth();
 
         // Enable offline persistence
         try {
@@ -82,14 +83,21 @@ class HamdDB {
     return snap.docs.map(d => d.data());
   }
 
-  async getUserByCredentials(username, password) {
-    const snap = await this.db.collection('users')
-      .where('username', '==', username)
-      .where('password', '==', password)
-      .where('active', '==', true)
-      .limit(1)
-      .get();
-    return snap.empty ? null : snap.docs[0].data();
+  async login(usernameOrEmail, password) {
+    let email = usernameOrEmail.trim();
+    if (!email.includes('@')) {
+      const snap = await this.db.collection('users').where('username', '==', email).limit(1).get();
+      if (snap.empty) return null;
+      email = snap.docs[0].data().email;
+    }
+    const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
+    const uid = userCredential.user.uid;
+    const userDoc = await this.db.collection('users').doc(uid).get();
+    return userDoc.exists ? userDoc.data() : null;
+  }
+
+  async logoutUser() {
+    await this.auth.signOut();
   }
 
   async delete(store, id) {

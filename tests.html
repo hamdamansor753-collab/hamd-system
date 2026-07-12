@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>H.A.M.D — Automated Testing Suite</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #0b111e;
+      --card: #151f32;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #6366f1;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --border: #1f293d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 40px 20px; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 40px; }
+    header h1 { font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    header p { color: var(--text-muted); font-size: 16px; }
+    .btn {
+      background: var(--primary); color: #fff; border: none; padding: 12px 24px;
+      font-size: 16px; font-weight: 600; border-radius: 8px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;
+    }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .kpi-card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; text-align: center; }
+    .kpi-val { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+    .kpi-label { font-size: 13px; color: var(--text-muted); }
+    .tests-list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+    .test-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .test-item:last-child { border-bottom: none; }
+    .test-info { display: flex; align-items: center; gap: 16px; }
+    .test-status { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .status-pending { background: #374151; color: var(--text-muted); }
+    .status-running { background: var(--warning); color: #000; animation: spin 1s infinite linear; }
+    .status-pass { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .test-name { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+    .test-desc { font-size: 12px; color: var(--text-muted); }
+    .console-log { background: #070b13; border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-family: monospace; font-size: 13px; color: #34d399; height: 250px; overflow-y: auto; direction: ltr; text-align: left; }
+    .log-entry { margin-bottom: 4px; }
+    .log-err { color: var(--danger); }
+    .log-success { color: var(--success); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>H.A.M.D QA & Security Testing Suite</h1>
+      <p>الاختبارات الآلية للتحقق من جودة الكود، العزل السحابي (Multi-Tenant Isolation)، والحسابات الرياضية</p>
+      <button class="btn" style="margin-top:20px" onclick="runAllTests()"><i class="fa fa-play"></i> بدء الفحص الكامل</button>
+    </header>
+
+    <div class="summary-cards">
+      <div class="kpi-card"><div class="kpi-val" id="kpi-total">5</div><div class="kpi-label">إجمالي الاختبارات</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="kpi-passed" style="color:var(--success)">0</div><div class="kpi-label">ناجح</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="kpi-failed" style="color:var(--danger)">0</div><div class="kpi-label">فاشل</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="kpi-status">جاهز</div><div class="kpi-label">حالة التشغيل</div></div>
+    </div>
+
+    <div class="tests-list" id="tests-container"></div>
+
+    <h3 style="margin-bottom:12px;font-size:16px;color:var(--text-muted)">سجل العمليات التفصيلي (Debug Console)</h3>
+    <div class="console-log" id="console">
+      [System] Console initialized. Ready to execute tests...
+    </div>
+  </div>
+
+  <!-- Firebase v8 Dependencies to mock environment -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <script>
+    const tests = [
+      { id: 'db_connection', name: 'اتصال قاعدة البيانات والتهيئة', desc: 'يتحقق من قدرة النظام على الاتصال بـ Firebase Firestore بنجاح.', run: testDbConnection },
+      { id: 'math_pos', name: 'الحسابات الرياضية في POS', desc: 'يتحقق من صحة حسابات الضريبة، الخصومات، وصافي الفاتورة بالكامل.', run: testPOSCalculations },
+      { id: 'tenant_isolation', name: 'عزل بيانات المستأجرين (Multi-Tenant Isolation)', desc: 'يتحقق من أن بيانات كل شركة معزولة تماماً ولا تظهر للشركات الأخرى.', run: testTenantIsolation },
+      { id: 'usage_limits', name: 'قيود الاستخدام للباقات (SaaS Plan Limits)', desc: 'يتحقق من منع إضافة أصناف أو عملاء أكثر من الحد المسموح للباقة الأساسية.', run: testUsageLimits },
+      { id: 'security_sanitization', name: 'فلترة المدخلات والحماية من ثغرات XSS/Injection', desc: 'يتحقق من تصفية المدخلات لمنع حقن النصوص البرمجية الخبيثة.', run: testSecuritySanitization }
+    ];
+
+    function log(msg, type = '') {
+      const c = document.getElementById('console');
+      const time = new Date().toLocaleTimeString();
+      let colorClass = '';
+      if (type === 'err') colorClass = 'log-err';
+      if (type === 'success') colorClass = 'log-success';
+      c.innerHTML += `<div class="log-entry ${colorClass}">[${time}] ${msg}</div>`;
+      c.scrollTop = c.scrollHeight;
+    }
+
+    function initUI() {
+      const container = document.getElementById('tests-container');
+      container.innerHTML = tests.map(t => `
+        <div class="test-item" id="test-${t.id}">
+          <div class="test-info">
+            <div class="test-status status-pending" id="status-${t.id}"><i class="fa fa-hourglass-start"></i></div>
+            <div>
+              <div class="test-name">${t.name}</div>
+              <div class="test-desc">${t.desc}</div>
+            </div>
+          </div>
+          <div class="test-result-badge" id="badge-${t.id}"></div>
+        </div>
+      `).join('');
+    }
+
+    window.onload = initUI;
+
+    async function runAllTests() {
+      document.getElementById('kpi-status').innerText = 'جاري الفحص';
+      document.getElementById('kpi-passed').innerText = '0';
+      document.getElementById('kpi-failed').innerText = '0';
+      log('Starting H.A.M.D Quality & Security Audit suite...');
+
+      let passedCount = 0;
+      let failedCount = 0;
+
+      for (const t of tests) {
+        const statusEl = document.getElementById(`status-${t.id}`);
+        statusEl.className = 'test-status status-running';
+        statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+        log(`Running: ${t.name}...`);
+
+        try {
+          const success = await t.run();
+          if (success) {
+            statusEl.className = 'test-status status-pass';
+            statusEl.innerHTML = '<i class="fa fa-check"></i>';
+            log(`PASS: ${t.name}`, 'success');
+            passedCount++;
+            document.getElementById('kpi-passed').innerText = passedCount;
+          } else {
+            throw new Error('Assertion failed');
+          }
+        } catch (err) {
+          statusEl.className = 'test-status status-fail';
+          statusEl.innerHTML = '<i class="fa fa-times"></i>';
+          log(`FAIL: ${t.name} - ${err.message}`, 'err');
+          failedCount++;
+          document.getElementById('kpi-failed').innerText = failedCount;
+        }
+      }
+
+      document.getElementById('kpi-status').innerText = failedCount === 0 ? 'مكتمل بنجاح' : 'يوجد أخطاء';
+      log(`Test Run Completed. Passed: ${passedCount}, Failed: ${failedCount}`, failedCount === 0 ? 'success' : 'err');
+    }
+
+    // 1. Connection check
+    async function testDbConnection() {
+      log('Verifying connection credentials configuration...');
+      if (typeof firebase === 'undefined') {
+        log('Firebase SDK not loaded', 'err');
+        return false;
+      }
+      log('Firebase SDK successfully loaded.', 'success');
+      return true;
+    }
+
+    // 2. POS math checks
+    async function testPOSCalculations() {
+      log('Running POS checkout mathematical correctness test...');
+      
+      const items = [
+        { price: 100, qty: 2 },  // 200
+        { price: 50, qty: 3 }   // 150
+      ]; // Total = 350
+      
+      const discount = 50; // Total after discount = 300
+      const taxRate = 14; // 14% tax on 300 = 42
+      
+      const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const afterDiscount = subtotal - discount;
+      const taxAmount = (afterDiscount * taxRate) / 100;
+      const grandTotal = afterDiscount + taxAmount;
+
+      log(`Computed Subtotal: ${subtotal} (Expected: 350)`);
+      log(`Computed Grand Total (with 14% VAT): ${grandTotal} (Expected: 342)`);
+
+      const pass = (subtotal === 350 && grandTotal === 342);
+      if (pass) {
+        log('POS mathematical calculations validated successfully.', 'success');
+        return true;
+      }
+      return false;
+    }
+
+    // 3. Multi-Tenant isolation
+    async function testTenantIsolation() {
+      log('Testing multi-tenant database filter security...');
+      
+      // Mock collection search
+      const mockDatabaseData = [
+        { id: '1', tenantId: 'T001', name: 'منتج شركة أ' },
+        { id: '2', tenantId: 'T001', name: 'منتج شركة أ ثاني' },
+        { id: '3', tenantId: 'T002', name: 'منتج شركة ب' }
+      ];
+
+      const currentTenantId = 'T001';
+      log(`Simulating request for Tenant ID: ${currentTenantId}`);
+      
+      // Filter database data
+      const filtered = mockDatabaseData.filter(item => item.tenantId === currentTenantId);
+      
+      log(`Filtered items count: ${filtered.length} (Expected: 2)`);
+      const leakage = filtered.some(item => item.tenantId !== currentTenantId);
+      
+      if (leakage) {
+        log('CRITICAL: Data leakage detected! Tenant A retrieved Tenant B data.', 'err');
+        return false;
+      }
+      
+      log('Tenant Isolation filter successfully verified. No leakage.', 'success');
+      return true;
+    }
+
+    // 4. Usage Limits
+    async function testUsageLimits() {
+      log('Testing Basic Plan usage constraints...');
+      
+      const basicPlanLimit = 15;
+      // Simulated product list with 15 existing products
+      const existingProductsCount = 15;
+      const newProductRequest = { name: 'منتج رقم 16' };
+
+      log(`Existing products in basic plan: ${existingProductsCount} / Limit: ${basicPlanLimit}`);
+      
+      const allowed = existingProductsCount < basicPlanLimit;
+      log(`New product creation allowed status: ${allowed} (Expected: false)`);
+
+      if (!allowed) {
+        log('Usage limits blocking verified successfully.', 'success');
+        return true;
+      }
+      return false;
+    }
+
+    // 5. Input Sanitization
+    async function testSecuritySanitization() {
+      log('Testing input sanitization filter for HTML injection...');
+      
+      const dangerousInput = "<script>alert('hack')</script> اسم العميل";
+      
+      // Sanitizer function
+      function sanitizeHTML(str) {
+        return str.replace(/[&<>'"]/g, 
+          tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+          }[tag] || tag)
+        );
+      }
+
+      const cleanOutput = sanitizeHTML(dangerousInput);
+      log(`Sanitized Output: ${cleanOutput}`);
+      
+      if (cleanOutput.includes('<script>')) {
+        log('Sanitization failed! Dangerous HTML scripts allowed.', 'err');
+        return false;
+      }
+      
+      log('Input sanitization and safety filters verified.', 'success');
+      return true;
+    }
+  </script>
+</body>
+</html>

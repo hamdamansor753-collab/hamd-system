@@ -772,6 +772,11 @@ const Pages = {
       await window.db.put('products', data);
       Toast.show(t('product_edited'), 'success');
     } else {
+      const limitExceeded = await this._checkLimitExceeded('products', 15);
+      if (limitExceeded) {
+        Toast.show('لقد تجاوزت الحد المسموح به لهذه الباقة (15 صنف)، يرجى ترقية الحساب للباقة الاحترافية!', 'warning', 6000);
+        return;
+      }
       await window.db.add('products', data);
       Toast.show(t('product_added'), 'success');
     }
@@ -969,8 +974,19 @@ const Pages = {
     data.creditLimit = parseFloat(data.creditLimit) || 0;
     data.balance = parseFloat(data.balance) || 0;
     data.active = true;
-    if (customerId) { data.id = customerId; await window.db.put('customers', data); Toast.show(t('customer_updated'), 'success'); }
-    else { await window.db.add('customers', data); Toast.show(t('customer_added'), 'success'); }
+    if (customerId) { 
+      data.id = customerId; 
+      await window.db.put('customers', data); 
+      Toast.show(t('customer_updated'), 'success'); 
+    } else { 
+      const limitExceeded = await this._checkLimitExceeded('customers', 5);
+      if (limitExceeded) {
+        Toast.show('لقد تجاوزت الحد المسموح به للعملاء لهذه الباقة (5 عملاء)، يرجى ترقية الحساب للباقة الاحترافية!', 'warning', 6000);
+        return;
+      }
+      await window.db.add('customers', data); 
+      Toast.show(t('customer_added'), 'success'); 
+    }
     Modal.close('customer-form');
     this.customers();
   },
@@ -1242,9 +1258,19 @@ const Pages = {
     data.balance = parseFloat(data.balance) || 0;
     data.creditLimit = parseFloat(data.creditLimit) || 0;
     data.active = true;
-    if (supplierId) { data.id = supplierId; await window.db.put('suppliers', data); }
-    else { await window.db.add('suppliers', data); }
-    Toast.show(t('saved'), 'success');
+    if (supplierId) { 
+      data.id = supplierId; 
+      await window.db.put('suppliers', data); 
+      Toast.show(t('saved'), 'success');
+    } else { 
+      const limitExceeded = await this._checkLimitExceeded('suppliers', 5);
+      if (limitExceeded) {
+        Toast.show('لقد تجاوزت الحد المسموح به للموردين لهذه الباقة (5 موردين)، يرجى ترقية الحساب للباقة الاحترافية!', 'warning', 6000);
+        return;
+      }
+      await window.db.add('suppliers', data); 
+      Toast.show(t('saved'), 'success');
+    }
     Modal.close('supplier-form');
     this.suppliers();
   },
@@ -1956,19 +1982,57 @@ const Pages = {
       const existing = await window.db.get('users', userId);
       if (!data.password) delete data.password;
       await window.db.put('users', { ...existing, ...data, id: userId });
+      Toast.show('تم حفظ المستخدم', 'success');
+      Modal.close('user-form');
+      this.users();
     } else {
-      await window.db.add('users', data);
+      const btn = e.target.querySelector('button[type="submit"]');
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> جاري الحفظ...';
+
+      try {
+        const email = data.username.includes('@') ? data.username : `${data.username}@${App.state.tenant.code || 'hamd'}.com`;
+        const res = await fetch('/api/create-user', {
+          method: 'POST',
+          body: JSON.stringify({
+            email,
+            password: data.password,
+            username: data.username,
+            name: data.name,
+            role: data.role,
+            tenantId: data.tenantId
+          })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'حدث خطأ أثناء إنشاء المستخدم');
+        Toast.show('تم إنشاء المستخدم وتأمينه بنجاح', 'success');
+        Modal.close('user-form');
+        this.users();
+      } catch (err) {
+        console.error(err);
+        Toast.show(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
     }
-    Toast.show('تم حفظ المستخدم', 'success');
-    Modal.close('user-form');
-    this.users();
   },
 
   async _deleteUser(id) {
     Modal.confirm('حذف مستخدم', 'هل أنت متأكد؟', async () => {
-      await window.db.delete('users', id);
-      Toast.show('تم الحذف', 'success');
-      this.users();
+      try {
+        const res = await fetch('/api/delete-user', {
+          method: 'POST',
+          body: JSON.stringify({ userId: id })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'حدث خطأ أثناء حذف المستخدم');
+        Toast.show('تم حذف المستخدم بنجاح', 'success');
+        this.users();
+      } catch (err) {
+        console.error(err);
+        Toast.show(err.message, 'error');
+      }
     });
   },
 
@@ -1978,6 +2042,32 @@ const Pages = {
   async settings() {
     const t = window.t || (k => k);
     const tenant = App.state.tenant;
+
+    const urlParams = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '');
+    if (urlParams.get('success') === 'true') {
+      if (urlParams.get('mock_payment') === 'true') {
+        const tId = urlParams.get('tenant_id') || App.state.tenant.id;
+        App.state.tenant.plan = 'pro';
+        window.db.get('tenants', tId).then(tDoc => {
+          if (tDoc) {
+            tDoc.plan = 'pro';
+            window.db.put('tenants', tDoc);
+          }
+        });
+      }
+      setTimeout(() => {
+        Toast.show('تمت ترقية الحساب للباقة الاحترافية بنجاح! شكراً لك ✓', 'success', 5000);
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash.split('?')[0]);
+        App.renderLayout();
+        Pages.settings();
+      }, 500);
+    } else if (urlParams.get('success') === 'false') {
+      setTimeout(() => {
+        Toast.show('تم إلغاء عملية الدفع، لم يتم ترقية الاشتراك.', 'warning', 5000);
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash.split('?')[0]);
+      }, 500);
+    }
+
     document.getElementById('page-content').innerHTML = `
       <div class="fade-in" style="max-width:700px">
         <div class="card mb-16">
@@ -2033,7 +2123,10 @@ const Pages = {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
             <div><span class="text-muted">${t('system_version')}</span> <strong>H.A.M.D v2.0</strong></div>
             <div><span class="text-muted">${t('account')}</span> <strong>${tenant.code}</strong></div>
-            <div><span class="text-muted">${t('plan')}</span> <strong>${tenant.plan === 'pro' ? '⭐ Pro' : 'Basic'}</strong></div>
+            <div><span class="text-muted">${t('plan')}</span> 
+              <strong>${tenant.plan === 'pro' ? '⭐ Pro' : 'Basic'}</strong>
+              ${tenant.plan !== 'pro' ? `<button class="btn btn-primary btn-sm" onclick="Pages._upgradeTenantSubscription(event)" style="margin-right:10px;padding:3px 8px;font-size:11px"><i class="fa fa-arrow-up"></i> ترقية لـ Pro</button>` : ''}
+            </div>
             <div><span class="text-muted">${t('state')}</span> <span class="badge ${navigator.onLine?'badge-success':'badge-warning'}">${navigator.onLine?t('online'):t('offline')}</span></div>
           </div>
         </div>
@@ -2357,6 +2450,250 @@ const Pages = {
         </div>
       </div>
     `;
+  },
+
+  // ══════════════════════════════════════════
+  //  SUPER ADMIN PAGES
+  // ══════════════════════════════════════════
+  async superAdmin() {
+    const pc = document.getElementById('page-content');
+    pc.innerHTML = '<div class="skeleton" style="height:150px;margin-bottom:16px"></div>' + '<div class="skeleton" style="height:300px"></div>';
+
+    try {
+      const tenants = await window.db.getAll('tenants');
+      const users = await window.db.getAll('users');
+      const products = await window.db.getAll('products');
+      const invoices = await window.db.getAll('invoices');
+
+      const activeTenants = tenants.filter(t => t.status !== 'suspended').length;
+      const totalRevenue = tenants.reduce((acc, t) => acc + (t.plan === 'pro' ? 299 : 0), 0);
+
+      pc.innerHTML = `
+        <div class="fade-in">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+            <h2 style="font-size:20px;font-weight:800">لوحة التحكم العامة للمنصة</h2>
+            <a href="tests.html" target="_blank" class="btn btn-secondary btn-sm" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:12px;padding:6px 12px"><i class="fa fa-vial"></i> تشغيل اختبارات الجودة والأمان</a>
+          </div>
+          <div class="kpis-grid mb-24">
+            <div class="kpi-card">
+              <div class="kpi-value">${tenants.length}</div>
+              <div class="kpi-label">إجمالي الشركات (Tenants)</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value">${activeTenants}</div>
+              <div class="kpi-label">الشركات النشطة</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value">${users.length}</div>
+              <div class="kpi-label">إجمالي المستخدمين</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value">${Fmt.currency(totalRevenue)} / شهرياً</div>
+              <div class="kpi-label">العائد الشهري المتوقع (MRR)</div>
+            </div>
+          </div>
+
+          <div class="card mb-16">
+            <div class="card-title">📊 إحصائيات الاستخدام العام</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+              <div>
+                <p>إجمالي المنتجات المضافة في النظام: <strong>${products.length} صنف</strong></p>
+                <p>إجمالي الفواتير الصادرة: <strong>${invoices.length} فاتورة</strong></p>
+              </div>
+              <div>
+                <p>متوسط المنتجات لكل شركة: <strong>${(products.length / (tenants.length || 1)).toFixed(1)} صنف</strong></p>
+                <p>متوسط الفواتير لكل شركة: <strong>${(invoices.length / (tenants.length || 1)).toFixed(1)} فاتورة</strong></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+      pc.innerHTML = `<div class="alert alert-danger">حدث خطأ أثناء تحميل بيانات المنصة</div>`;
+    }
+  },
+
+  async tenantsList() {
+    const pc = document.getElementById('page-content');
+    pc.innerHTML = '<div class="skeleton" style="height:300px"></div>';
+
+    try {
+      const tenants = await window.db.getAll('tenants');
+
+      pc.innerHTML = `
+        <div class="fade-in">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <input type="text" placeholder="بحث باسم الشركة أو الرمز..." oninput="Pages._filterTable('tenants-table',this.value,['name','code'])">
+              <i class="fa fa-search"></i>
+            </div>
+            <button class="btn btn-primary" onclick="Pages._tenantForm()"><i class="fa fa-plus"></i> إضافة شركة جديدة</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table" id="tenants-table">
+              <thead>
+                <tr>
+                  <th>الرمز</th>
+                  <th>اسم الشركة</th>
+                  <th>العنوان</th>
+                  <th>الهاتف</th>
+                  <th>الباقة</th>
+                  <th>الحالة</th>
+                  <th>العمليات</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tenants.map(t => `
+                  <tr data-name="${t.name}" data-code="${t.code}">
+                    <td><code>${t.code}</code></td>
+                    <td><strong>${t.name}</strong></td>
+                    <td>${t.address || '—'}</td>
+                    <td dir="ltr">${t.phone || '—'}</td>
+                    <td><span class="badge ${t.plan === 'pro' ? 'badge-success' : 'badge-secondary'}">${t.plan === 'pro' ? 'Pro ⭐' : 'Basic'}</span></td>
+                    <td><span class="badge ${t.status !== 'suspended' ? 'badge-success' : 'badge-danger'}">${t.status !== 'suspended' ? 'نشط' : 'موقوف'}</span></td>
+                    <td>
+                      <div class="actions">
+                        <button class="btn btn-secondary btn-sm" onclick="Pages._toggleTenantStatus('${t.id}', '${t.status || 'active'}')" title="${t.status !== 'suspended' ? 'إيقاف' : 'تفعيل'}">
+                          <i class="fa ${t.status !== 'suspended' ? 'fa-ban' : 'fa-check'}"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="Pages._changeTenantPlan('${t.id}', '${t.plan}')" title="تغيير الباقة">
+                          <i class="fa fa-arrow-up"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+      pc.innerHTML = `<div class="alert alert-danger">حدث خطأ أثناء تحميل الشركات</div>`;
+    }
+  },
+
+  async _tenantForm() {
+    Modal.open('tenant-form', 'إضافة مستأجر/شركة جديدة', `
+      <form onsubmit="Pages._saveTenant(event)">
+        <div class="form-row cols-2">
+          <div class="form-group"><label class="form-label required">اسم الشركة</label><input type="text" class="form-control" name="name" required></div>
+          <div class="form-group"><label class="form-label required">رمز الشركة (Code)</label><input type="text" class="form-control" name="code" placeholder="مثال: delta-store" required></div>
+        </div>
+        <div class="form-row cols-2">
+          <div class="form-group"><label class="form-label">الهاتف</label><input type="tel" class="form-control" name="phone" dir="ltr"></div>
+          <div class="form-group"><label class="form-label">الباقة</label>
+            <select class="form-control" name="plan">
+              <option value="basic">Basic (أساسية)</option>
+              <option value="pro">Pro (احترافية)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" name="address"></div>
+        <div class="modal-footer" style="padding:0;margin-top:16px">
+          <button type="button" class="btn btn-secondary" onclick="Modal.close('tenant-form')">إلغاء</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> حفظ الشركة</button>
+        </div>
+      </form>
+    `);
+  },
+
+  async _saveTenant(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd.entries());
+    data.id = 'T' + Date.now().toString().slice(-4);
+    data.status = 'active';
+    data.currency = 'EGP';
+    data.taxRate = 14;
+    data.createdAt = new Date().toISOString();
+
+    try {
+      await window.db.put('tenants', data);
+      Toast.show('تم إضافة الشركة بنجاح', 'success');
+      Modal.close('tenant-form');
+      this.tenantsList();
+    } catch (err) {
+      console.error(err);
+      Toast.show('حدث خطأ أثناء حفظ الشركة', 'error');
+    }
+  },
+
+  async _toggleTenantStatus(id, currentStatus) {
+    const nextStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+    Modal.confirm(
+      nextStatus === 'suspended' ? 'إيقاف الشركة' : 'تفعيل الشركة',
+      `هل أنت متأكد من تغيير حالة الشركة؟`,
+      async () => {
+        try {
+          const tenant = await window.db.get('tenants', id);
+          tenant.status = nextStatus;
+          await window.db.put('tenants', tenant);
+          Toast.show('تم تحديث حالة الشركة بنجاح', 'success');
+          this.tenantsList();
+        } catch (err) {
+          console.error(err);
+          Toast.show('حدث خطأ أثناء تحديث حالة الشركة', 'error');
+        }
+      }
+    );
+  },
+
+  async _changeTenantPlan(id, currentPlan) {
+    const nextPlan = currentPlan === 'pro' ? 'basic' : 'pro';
+    Modal.confirm(
+      'تغيير الباقة',
+      `هل تريد تحويل باقة الشركة إلى الباقة ${nextPlan === 'pro' ? 'الاحترافية (Pro)' : 'الأساسية (Basic)'}؟`,
+      async () => {
+        try {
+          const tenant = await window.db.get('tenants', id);
+          tenant.plan = nextPlan;
+          await window.db.put('tenants', tenant);
+          Toast.show('تم ترقية/تخفيض الباقة بنجاح', 'success');
+          this.tenantsList();
+        } catch (err) {
+          console.error(err);
+          Toast.show('حدث خطأ أثناء تغيير الباقة', 'error');
+        }
+      }
+    );
+  },
+
+  async _checkLimitExceeded(store, maxLimit) {
+    const tenantId = App.state.tenant.id;
+    const plan = App.state.tenant.plan || 'basic';
+    if (plan === 'pro') return false;
+    const data = await window.db.getTenantData(store, tenantId);
+    return data.length >= maxLimit;
+  },
+
+  async _upgradeTenantSubscription(e) {
+    const btn = e.currentTarget || e.target;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> جاري التحويل...';
+    
+    try {
+      const res = await fetch('/api/stripe-checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenantId: App.state.tenant.id,
+          tenantCode: App.state.tenant.code,
+          hostUrl: window.location.origin
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'حدث خطأ أثناء الاتصال ببوابة الدفع');
+      
+      window.location.href = result.url;
+    } catch (err) {
+      console.error(err);
+      Toast.show(err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   },
 
   // ══════════════════════════════════════════

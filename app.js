@@ -22,6 +22,13 @@ const App = {
     this.applyTheme(this.state.theme);
     this.applyLanguage(this.state.lang);
     await window.db.init();
+    
+    const subdomainTenant = await this.detectTenantBySubdomain();
+    if (subdomainTenant) {
+      this.state.detectedTenant = subdomainTenant;
+      document.title = `${subdomainTenant.name} — تسجيل الدخول`;
+    }
+
     this.setupOnlineDetection();
     this.setupServiceWorker();
     if (typeof Barcode !== 'undefined' && Barcode.initGlobalListener) {
@@ -33,6 +40,30 @@ const App = {
     } else {
       this.showAuthScreen();
     }
+  },
+
+  async detectTenantBySubdomain() {
+    try {
+      const host = window.location.hostname;
+      const parts = host.split('.');
+      let subdomain = null;
+      
+      if (host.endsWith('.vercel.app') && parts.length === 3) {
+        subdomain = parts[0];
+      } else if (parts.length > 2 && parts[0] !== 'www' && !host.includes('localhost')) {
+        subdomain = parts[0];
+      }
+      
+      if (subdomain) {
+        const snap = await window.db.db.collection('tenants').where('code', '==', subdomain).limit(1).get();
+        if (!snap.empty) {
+          return snap.docs[0].data();
+        }
+      }
+    } catch (err) {
+      console.error("Subdomain detection error:", err);
+    }
+    return null;
   },
 
   getSession() {
@@ -199,13 +230,20 @@ const App = {
 
   renderAuthScreen() {
     const auth = document.getElementById('auth-screen');
+    const tenant = this.state.detectedTenant;
+    
+    const logo = tenant ? (tenant.logo || tenant.name[0]) : 'H.A';
+    const name = tenant ? tenant.name : 'H.A.M.D';
+    const desc = tenant ? `مرحباً بك في بوابة ${tenant.name}` : 'نظام إدارة المخازن الاحترافي';
+    const color = tenant ? (tenant.color || '#6366f1') : '#6366f1';
+    
     auth.innerHTML = `
-      <div class="auth-bg"></div>
+      <div class="auth-bg" style="background: radial-gradient(ellipse at 50% 50%, ${color}20 0%, transparent 70%), #060b18"></div>
       <div class="auth-card fade-in">
         <div class="auth-logo">
-          <div class="auth-logo-icon">H.A</div>
-          <h1>H.A.M.D</h1>
-          <p>نظام إدارة المخازن الاحترافي</p>
+          <div class="auth-logo-icon" style="background: linear-gradient(135deg, ${color}, #0ea5e9)">${logo}</div>
+          <h1>${name}</h1>
+          <p>${desc}</p>
         </div>
         <div id="auth-content">
           ${this.renderLoginForm()}
@@ -252,7 +290,7 @@ const App = {
     await new Promise(r => setTimeout(r, 600)); // UX delay
 
     try {
-      const user = await window.db.getUserByCredentials(username, password);
+      const user = await window.db.login(username, password);
 
       if (!user) {
         errEl.style.display = 'flex';
@@ -264,6 +302,14 @@ const App = {
 
       const tenant = await window.db.get('tenants', user.tenantId);
 
+      if (tenant && tenant.status === 'suspended') {
+        errEl.style.display = 'flex';
+        errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> تم إيقاف حساب هذه الشركة. يرجى التواصل مع الإدارة';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> تسجيل الدخول';
+        return;
+      }
+
       this.state.tenant = tenant;
       this.state.user = user;
       this.saveSession(tenant, user);
@@ -274,17 +320,22 @@ const App = {
     } catch (err) {
       console.error("Login Error:", err);
       errEl.style.display = 'flex';
-      errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> حدث خطأ أثناء الاتصال بالخادم';
+      errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> اسم المستخدم أو كلمة المرور غير صحيحة';
       btn.disabled = false;
       btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> تسجيل الدخول';
     }
   },
 
   logout() {
-    Modal.confirm('تسجيل الخروج', 'هل أنت متأكد من تسجيل الخروج؟', () => {
+    Modal.confirm('تسجيل الخروج', 'هل أنت متأكد من تسجيل الخروج؟', async () => {
       this.state.tenant = null;
       this.state.user = null;
       this.clearSession();
+      try {
+        await window.db.logoutUser();
+      } catch (err) {
+        console.error(err);
+      }
       document.getElementById('app').style.display = 'none';
       document.getElementById('auth-screen').style.display = 'flex';
     });
@@ -426,6 +477,19 @@ const App = {
     const t = window.t || (k => k);
     const role = this.state.user?.role || 'admin';
     const isCashier = role === 'cashier';
+    
+    if (role === 'super-admin') {
+      return [
+        {
+          title: "إدارة المنصة (SaaS)",
+          items: [
+            { id: 'superAdmin', icon: 'fa fa-user-shield', label: 'لوحة التحكم العامة' },
+            { id: 'tenantsList', icon: 'fa fa-building', label: 'الشركات المشتركة' },
+            { id: 'settings', icon: 'fa fa-cog', label: t('settings') }
+          ]
+        }
+      ];
+    }
     
     let nav = [
       {

@@ -1,0 +1,13 @@
+{
+  "name": "hamd-system-saas",
+  "version": "2.0.0",
+  "description": "H.A.M.D — Warehouse Management SaaS Backend APIs",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node start_server.ps1"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.8.0",
+    "stripe": "^12.5.0"
+  }
+}
