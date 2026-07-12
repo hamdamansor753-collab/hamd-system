@@ -40,14 +40,21 @@ module.exports = async (req, res) => {
 
   try {
     const rawBody = await getRawBody(req);
-    
-    // In local development or testing without webhook secret, bypass signature check
+
+    // ⚠️ SECURITY FIX: this endpoint previously bypassed Stripe signature
+    // verification entirely whenever STRIPE_WEBHOOK_SECRET was not set,
+    // parsing the raw request body as a trusted event. That meant anyone
+    // could POST a forged "checkout.session.completed" body with an
+    // arbitrary tenantId and get that tenant upgraded to Pro for free,
+    // with zero involvement from Stripe. This now fails closed: if the
+    // webhook secret isn't configured, the request is rejected instead of
+    // silently trusted.
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      console.warn("STRIPE_WEBHOOK_SECRET is not set, parsing payload directly (dev mode)");
-      event = JSON.parse(rawBody.toString());
-    } else {
-      event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+      console.error("STRIPE_WEBHOOK_SECRET is not set — refusing to process webhook (fail closed).");
+      res.status(500).json({ error: 'Webhook not configured. Set STRIPE_WEBHOOK_SECRET.' });
+      return;
     }
+    event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
 
     if (event.type === 'checkout.session.completed' || event.type === 'customer.subscription.created') {
       const session = event.data.object;

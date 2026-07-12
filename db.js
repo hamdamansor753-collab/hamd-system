@@ -41,33 +41,26 @@ class HamdDB {
         }
 
         this.ready = true;
-        
-        // Seed demo data if database is empty
+
+        // ⚠️ SECURITY FIX: automatic seeding of a superadmin account with a
+        // hardcoded, known password has been REMOVED. It was previously
+        // creating `superadmin` / `superadmin123` on every fresh database,
+        // in plaintext, directly from client-side code — and that password
+        // was visible to anyone reading this file (including on a public
+        // GitHub repo). Bootstrap the first admin account using the secure
+        // server-side script instead: `node scripts/create-superadmin.js`
+        // (see that file for usage). It creates the account through
+        // Firebase Auth with a strong, randomly generated password (or one
+        // you supply via environment variable), never stores it in
+        // Firestore, and never runs inside the browser.
         await this._seedDemoData();
-        await this.ensureSuperAdmin();
-        
+
         resolve(this);
       } catch (err) {
         console.error("Firebase Initialization Error:", err);
         reject(err);
       }
     });
-  }
-
-  async ensureSuperAdmin() {
-    try {
-      const snap = await this.db.collection('users').where('username', '==', 'superadmin').limit(1).get();
-      if (snap.empty) {
-        const tenant0 = { id: 'T000', code: 'saas-owner', name: 'إدارة منصة H.A.M.D', plan: 'pro', currency: 'EGP', taxRate: 0, address: 'المكتب الرئيسي', phone: '010', logo: 'S', color: '#10b981', createdAt: new Date().toISOString() };
-        await this.put('tenants', tenant0);
-        
-        const superUser = { id: 'U005', tenantId: 'T000', username: 'superadmin', password: 'superadmin123', name: 'مدير المنصة العام', email: 'superadmin@hamd.com', role: 'super-admin', active: true };
-        await this.put('users', superUser);
-        console.log("Superadmin user and tenant seeded successfully");
-      }
-    } catch (e) {
-      console.warn("ensureSuperAdmin failed:", e);
-    }
   }
 
   // ── Core CRUD ──
@@ -124,52 +117,21 @@ class HamdDB {
       console.warn("Could not query user in Firestore", e);
     }
 
-    try {
-      const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
-      const uid = userCredential.user.uid;
-      const userDoc = await this.db.collection('users').doc(uid).get();
-      return userDoc.exists ? userDoc.data() : null;
-    } catch (authErr) {
-      console.warn("Auth failed, checking migration / local fallback:", authErr.code);
-      
-      if (userDocData && userDocData.password === password) {
-        // Attempt migration in background
-        try {
-          const res = await fetch('/api/create-user', {
-            method: 'POST',
-            body: JSON.stringify({
-              email: email,
-              password: password,
-              username: userDocData.username,
-              name: userDocData.name,
-              role: userDocData.role,
-              tenantId: userDocData.tenantId
-            })
-          });
-          
-          if (res.ok) {
-            const result = await res.json();
-            if (userDocId !== result.userId) {
-              try {
-                await usersCol.doc(userDocId).delete();
-              } catch (delErr) {
-                console.warn("Failed to delete old user doc:", delErr);
-              }
-            }
-            // Sign in again with Firebase Auth to establish the session token
-            try {
-              await this.auth.signInWithEmailAndPassword(email, password);
-            } catch(e) {}
-          }
-        } catch (migErr) {
-          console.warn("Migration failed, continuing with Firestore fallback:", migErr);
-        }
-        
-        console.log("Local credentials matched! Logging in via Firestore fallback.");
-        return userDocData;
-      }
-      throw authErr;
-    }
+    // ⚠️ SECURITY FIX: the previous version of this function fell back to
+    // comparing a PLAINTEXT `password` field stored on the Firestore user
+    // document (`userDocData.password === password`) whenever Firebase Auth
+    // sign-in failed. That meant passwords were being stored and compared
+    // in clear text, bypassing Firebase Auth's hashing entirely — a
+    // critical vulnerability. That fallback has been removed. Firebase Auth
+    // is now the ONLY accepted authentication path. If a legacy account
+    // still only has a Firestore `password` field and no real Firebase Auth
+    // account, it must be migrated through the secure
+    // `scripts/migrate-legacy-user.js` script (run once, server-side, by an
+    // administrator) rather than silently accepted at login time.
+    const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
+    const uid = userCredential.user.uid;
+    const userDoc = await this.db.collection('users').doc(uid).get();
+    return userDoc.exists ? userDoc.data() : null;
   }
 
   async logoutUser() {
@@ -227,22 +189,60 @@ class HamdDB {
   }
 
   async updateProductStock(tenantId, productId, qty, direction, type, ref) {
-    const move = {
-      id: this._uid(),
-      tenantId, productId, qty, direction, type,
-      ref: ref || '',
-      date: new Date().toISOString(),
-      balance: 0,
-    };
-    await this.add('stockMoves', move);
-    
-    // Update product stock field
-    const product = await this.get('products', productId);
-    if (product) {
-      product.stock = (product.stock || 0) + (qty * (direction === 'in' ? 1 : -1));
-      await this.put('products', product);
-    }
-    return product;
+    // ⚠️ SECURITY/INTEGRITY FIX: this previously did a plain read-then-write
+    // (get product, then put product) with NO transaction and NO server-side
+    // check that stock was actually available before decrementing. That is a
+    // classic race condition: two concurrent sales of the same product
+    // (e.g. two branches, or two browser tabs) could both read the same
+    // stock value and one update would silently overwrite the other, and
+    // stock could go negative with no warning. It also all ran client-side,
+    // so it was trivially bypassable from the browser console.
+    //
+    // This is now wrapped in a Firestore transaction, and outbound
+    // movements (direction === 'out') are rejected if insufficient stock is
+    // available at the moment of the transaction, not at the moment the UI
+    // last checked.
+    //
+    // ⚠️ REMAINING ARCHITECTURAL DEBT: this still executes in the browser.
+    // True enforcement (so a malicious/compromised client cannot bypass the
+    // check entirely) requires moving this logic into a Cloud Function or
+    // authenticated server API that the client calls, with Firestore
+    // Security Rules denying direct client writes to `products.stock` and
+    // `stockMoves`. Flagged here so it isn't forgotten — recommended as the
+    // next priority fix after this commit.
+    const productRef = this.db.collection('products').doc(productId);
+    const moveRef = this.db.collection('stockMoves').doc(this._uid());
+    const delta = qty * (direction === 'in' ? 1 : -1);
+
+    const updatedProduct = await this.db.runTransaction(async (tx) => {
+      const productSnap = await tx.get(productRef);
+      if (!productSnap.exists) {
+        throw new Error('Product not found');
+      }
+      const product = productSnap.data();
+      if (product.tenantId !== tenantId) {
+        throw new Error('Tenant mismatch on stock update');
+      }
+      const currentStock = parseFloat(product.stock) || 0;
+      const newStock = currentStock + delta;
+
+      if (direction === 'out' && newStock < 0) {
+        throw new Error('INSUFFICIENT_STOCK');
+      }
+
+      tx.set(moveRef, {
+        id: moveRef.id,
+        tenantId, productId, qty, direction, type,
+        ref: ref || '',
+        date: new Date().toISOString(),
+        balanceAfter: newStock,
+      });
+      tx.update(productRef, { stock: newStock });
+
+      return { ...product, stock: newStock };
+    });
+
+    return updatedProduct;
   }
 
   async getDashboardStats(tenantId) {

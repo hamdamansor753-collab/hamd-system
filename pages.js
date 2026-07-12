@@ -551,7 +551,18 @@ const Pages = {
         Print.invoice(invoice, window._posCart.map(i => ({...i, name: i.name})), customer, App.state.tenant);
       });
     } catch (err) {
-      Toast.show('حدث خطأ أثناء حفظ الفاتورة', 'error');
+      // NOTE: if this fails partway through the items loop (e.g.
+      // INSUFFICIENT_STOCK on a later item), the invoice document and any
+      // already-processed stock movements are NOT rolled back — this whole
+      // checkout flow needs to become a single atomic operation (ideally a
+      // server-side Cloud Function) so either the entire sale succeeds or
+      // none of it does. Flagged as a priority follow-up; not fixed in this
+      // pass to avoid a large untested rewrite of the POS flow.
+      if (err && err.message === 'INSUFFICIENT_STOCK') {
+        Toast.show('الكمية المطلوبة غير متاحة في المخزون', 'error');
+      } else {
+        Toast.show('حدث خطأ أثناء حفظ الفاتورة', 'error');
+      }
       console.error(err);
     }
     btn.disabled = false;
@@ -2045,16 +2056,14 @@ const Pages = {
 
     const urlParams = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '');
     if (urlParams.get('success') === 'true') {
-      if (urlParams.get('mock_payment') === 'true') {
-        const tId = urlParams.get('tenant_id') || App.state.tenant.id;
-        App.state.tenant.plan = 'pro';
-        window.db.get('tenants', tId).then(tDoc => {
-          if (tDoc) {
-            tDoc.plan = 'pro';
-            window.db.put('tenants', tDoc);
-          }
-        });
-      }
+      // SECURITY FIX: this block used to trust mock_payment=true in the URL
+      // and write plan:'pro' directly to Firestore for whatever tenant_id
+      // was in the URL - anyone could type this URL by hand and grant ANY
+      // tenant a free upgrade, bypassing Stripe entirely. Client-side code
+      // must never grant itself a paid plan. The dev-only mock checkout
+      // still redirects here to show the toast, but no longer writes to
+      // Firestore - real upgrades only happen server-side in
+      // api/stripe-webhook.js after Stripe verifies an actual payment.
       setTimeout(() => {
         Toast.show('تمت ترقية الحساب للباقة الاحترافية بنجاح! شكراً لك ✓', 'success', 5000);
         window.history.replaceState({}, document.title, window.location.pathname + window.location.hash.split('?')[0]);

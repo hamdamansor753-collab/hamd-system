@@ -29,6 +29,42 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// ⚠️ SECURITY FIX: this endpoint previously had NO authentication check at
+// all — any anonymous request on the internet could create a user with
+// role "admin" for any tenantId, which is a full account-takeover /
+// tenant-isolation-bypass vulnerability. It now requires a valid Firebase
+// ID token in the `Authorization: Bearer <token>` header, verifies the
+// caller's custom claims, and only allows an `admin` or `super-admin` to
+// create users — and only within their own tenant (unless they are
+// `super-admin`).
+async function verifyCallerAndAuthorize(req, requestedTenantId) {
+  const authHeader = req.headers['authorization'] || '';
+  const match = authHeader.match(/^Bearer (.+)$/);
+  if (!match) {
+    const err = new Error('Missing Authorization Bearer token');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const decoded = await admin.auth().verifyIdToken(match[1]);
+  const callerRole = decoded.role;
+  const callerTenantId = decoded.tenantId;
+
+  if (callerRole !== 'admin' && callerRole !== 'super-admin') {
+    const err = new Error('Caller does not have permission to create users');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (callerRole !== 'super-admin' && callerTenantId !== requestedTenantId) {
+    const err = new Error('Cannot create a user for a different tenant');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return decoded;
+}
+
 module.exports = async (req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -57,6 +93,16 @@ module.exports = async (req, res) => {
       return;
     }
 
+    await verifyCallerAndAuthorize(req, tenantId);
+
+    // A caller who is not super-admin can never grant a role higher than
+    // "admin" within their own tenant — prevents privilege escalation via
+    // this endpoint (e.g. a tenant admin trying to grant "super-admin").
+    if (role === 'super-admin') {
+      res.status(403).json({ error: 'Only an existing super-admin can create another super-admin (use the server-side script, not this API)' });
+      return;
+    }
+
     // 1. Create user in Firebase Authentication
     const userRecord = await admin.auth().createUser({
       email,
@@ -71,6 +117,8 @@ module.exports = async (req, res) => {
     });
 
     // 3. Save User Profile in Firestore users collection
+    // Note: intentionally no `password` field is stored here — Firebase
+    // Auth is the sole source of truth for credentials.
     const userProfile = {
       id: userRecord.uid,
       tenantId,
@@ -87,6 +135,6 @@ module.exports = async (req, res) => {
     res.status(201).json({ success: true, userId: userRecord.uid });
   } catch (error) {
     console.error('Error creating user:', error);
-    res.status(500).json({ error: error.message || 'Internal Server Error' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Internal Server Error' });
   }
 };

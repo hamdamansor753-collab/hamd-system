@@ -30,12 +30,25 @@ module.exports = async (req, res) => {
 
     const baseDomain = hostUrl || 'https://hamd-system.vercel.app';
 
-    // Mock response for testing/development if Stripe key is not configured
-    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_mock_stripe_key_12345') {
-      console.log("Stripe key is not set, generating mock checkout session");
-      
-      // In development, we can simulate checkout success by directing to success URL
-      res.status(200).json({ 
+    // ⚠️ SECURITY FIX: this "mock checkout" branch previously redirected the
+    // browser straight to a success=true&mock_payment=true&tenant_id=...
+    // URL whenever the Stripe key was unset — and the client-side JS
+    // (pages.js) trusted that URL and wrote plan:'pro' directly to
+    // Firestore for the given tenantId. That meant ANY visitor could type
+    // that URL by hand, for ANY tenant, and get a free upgrade with zero
+    // payment and zero server verification. The mock path is now only
+    // allowed outside production, and the client no longer writes the
+    // upgrade itself (see pages.js) — real upgrades only ever happen
+    // server-side via the verified Stripe webhook.
+    const stripeNotConfigured = !process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_mock_stripe_key_12345';
+    if (stripeNotConfigured) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error("Stripe is not configured in production — refusing to issue a mock checkout session.");
+        res.status(500).json({ error: 'Billing is not configured on this server.' });
+        return;
+      }
+      console.warn("Stripe key is not set — generating a DEV-ONLY mock checkout session (no free upgrade is granted client-side).");
+      res.status(200).json({
         url: `${baseDomain}/app.html#settings?success=true&mock_payment=true&tenant_id=${tenantId}`
       });
       return;

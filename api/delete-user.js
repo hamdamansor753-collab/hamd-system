@@ -29,6 +29,47 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// ⚠️ SECURITY FIX: this endpoint previously had NO authentication check —
+// any anonymous request could delete any user by guessing/knowing a
+// userId. It now requires a valid Firebase ID token, verifies the caller
+// is an admin/super-admin, and only allows deleting users within the
+// caller's own tenant (unless the caller is super-admin). It also refuses
+// to let a caller delete their own account through this endpoint (avoids
+// accidental total-lockout of a tenant).
+async function verifyCallerAndAuthorize(req, targetUserDoc) {
+  const authHeader = req.headers['authorization'] || '';
+  const match = authHeader.match(/^Bearer (.+)$/);
+  if (!match) {
+    const err = new Error('Missing Authorization Bearer token');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const decoded = await admin.auth().verifyIdToken(match[1]);
+  const callerRole = decoded.role;
+  const callerTenantId = decoded.tenantId;
+
+  if (callerRole !== 'admin' && callerRole !== 'super-admin') {
+    const err = new Error('Caller does not have permission to delete users');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (callerRole !== 'super-admin' && targetUserDoc && callerTenantId !== targetUserDoc.tenantId) {
+    const err = new Error('Cannot delete a user from a different tenant');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (decoded.uid === (targetUserDoc && targetUserDoc.id)) {
+    const err = new Error('Cannot delete your own account through this endpoint');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return decoded;
+}
+
 module.exports = async (req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -57,6 +98,11 @@ module.exports = async (req, res) => {
       return;
     }
 
+    const targetDocSnap = await db.collection('users').doc(userId).get();
+    const targetUserDoc = targetDocSnap.exists ? targetDocSnap.data() : null;
+
+    await verifyCallerAndAuthorize(req, targetUserDoc);
+
     // 1. Delete user from Firebase Authentication
     try {
       await admin.auth().deleteUser(userId);
@@ -70,6 +116,6 @@ module.exports = async (req, res) => {
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Error deleting user:', error);
-    res.status(500).json({ error: error.message || 'Internal Server Error' });
+    res.status(error.statusCode || 500).json({ error: error.message || 'Internal Server Error' });
   }
 };

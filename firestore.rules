@@ -31,15 +31,50 @@ service cloud.firestore {
     }
 
     // قواعد حماية مجموعة المستخدمين
+    // SECURITY FIX: the previous rule only checked that the caller's role
+    // was 'admin', with NO check that the target user document belonged to
+    // the same tenant. That meant an admin of Tenant A could read/overwrite
+    // (including deactivate or change role of) any user document in
+    // Tenant B - a direct cross-tenant data breach. It's now scoped so a
+    // regular admin can only touch users in their own tenant; only
+    // 'super-admin' (the platform owner) can cross tenant boundaries. It
+    // also blocks a caller from escalating anyone's role to 'super-admin'
+    // via a normal write - that's server-only.
+    function isSuperAdmin() {
+      return isLoggedIn() && getUserData().role == 'super-admin';
+    }
+    function sameTenantAsCaller(docData) {
+      return isLoggedIn() && getUserData().tenantId == docData.tenantId;
+    }
     match /users/{userId} {
-      allow read: if isLoggedIn() && (request.auth.uid == userId || getUserData().role == 'admin');
-      allow write: if isLoggedIn() && getUserData().role == 'admin';
+      allow read: if isLoggedIn() && (
+        request.auth.uid == userId
+        || isSuperAdmin()
+        || (getUserData().role == 'admin' && sameTenantAsCaller(resource.data))
+      );
+      allow write: if isLoggedIn() && request.resource.data.role != 'super-admin' && (
+        isSuperAdmin()
+        || (getUserData().role == 'admin'
+            && sameTenantAsCaller(resource.data)
+            && sameTenantAsCaller(request.resource.data))
+      );
     }
 
     // قواعد حماية الشركات
+    // SECURITY FIX: clients (even tenant admins) must never be able to
+    // write plan/status on their own tenant document directly - that field
+    // must ONLY change via the server-side Stripe webhook (Admin SDK,
+    // bypasses these rules). Without this, a tenant admin could open the
+    // browser console and set their own plan to 'pro' for free. Other
+    // tenant fields (name, address, phone, logo, color...) stay editable.
+    function planAndStatusUnchanged() {
+      return request.resource.data.plan == resource.data.plan
+          && request.resource.data.status == resource.data.status;
+    }
     match /tenants/{tenantId} {
       allow read: if isLoggedIn() && isTenant(tenantId);
-      allow write: if isLoggedIn() && isTenant(tenantId) && getUserData().role == 'admin';
+      allow update: if isLoggedIn() && isTenant(tenantId) && getUserData().role == 'admin' && planAndStatusUnchanged();
+      allow create, delete: if false; // tenants are only created/deleted server-side (Admin SDK)
     }
 
     // قواعد حماية باقي الجداول التشغيلية (الأصناف، الفواتير، العملاء، إلخ)
