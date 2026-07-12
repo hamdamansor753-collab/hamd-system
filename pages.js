@@ -2011,6 +2011,16 @@ const Pages = {
           </div>
         </div>
 
+        <div class="card mb-16">
+          <div class="card-title mb-16">📊 استيراد البيانات من إكسيل (Excel)</div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">يمكنك رفع ملف إكسيل يحتوي على الأصناف، الموردين، والعملاء لاستيرادهم دفعة واحدة.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary" onclick="Pages._downloadExcelTemplate()"><i class="fa fa-download"></i> تحميل النموذج المرجعي</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('excel-import-file').click()"><i class="fa fa-file-excel"></i> اختيار ملف الإكسيل</button>
+            <input type="file" id="excel-import-file" style="display:none" accept=".xlsx, .xls" onchange="Pages._importExcelData(event)">
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title mb-16">ℹ️ ${t('system_info')}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
@@ -2066,6 +2076,162 @@ const Pages = {
 
   _importBackup() {
     Toast.show('ميزة الاستيراد قيد التطوير', 'info');
+  },
+
+  _downloadExcelTemplate() {
+    try {
+      const wb = XLSX.utils.book_new();
+      
+      // Products Sheet
+      const productsData = [
+        ["الاسم", "الباركود", "اسم الفئة", "سعر البيع", "سعر الشراء", "رصيد المخزون الحالي", "الحد الأدنى للمخزون"],
+        ["صنف تجريبي 1", "6221000112233", "إلكترونيات", 150, 100, 20, 5],
+        ["صنف تجريبي 2", "6221000112244", "غذائيات", 10, 7.5, 100, 10]
+      ];
+      const wsProducts = XLSX.utils.aoa_to_sheet(productsData);
+      XLSX.utils.book_append_sheet(wb, wsProducts, "الأصناف");
+
+      // Suppliers Sheet
+      const suppliersData = [
+        ["الاسم", "الهاتف", "العنوان", "الرقم الضريبي"],
+        ["شركة التوريد العالمية", "0123456789", "القاهرة، مصر", "123456789"]
+      ];
+      const wsSuppliers = XLSX.utils.aoa_to_sheet(suppliersData);
+      XLSX.utils.book_append_sheet(wb, wsSuppliers, "الموردين");
+
+      // Customers Sheet
+      const customersData = [
+        ["الاسم", "الهاتف", "العنوان"],
+        ["العميل المثالي", "0987654321", "الرياض، السعودية"]
+      ];
+      const wsCustomers = XLSX.utils.aoa_to_sheet(customersData);
+      XLSX.utils.book_append_sheet(wb, wsCustomers, "العملاء");
+
+      XLSX.writeFile(wb, "H.A.M.D_Import_Template.xlsx");
+      Toast.show('تم تحميل النموذج المرجعي بنجاح', 'success');
+    } catch (err) {
+      console.error("Excel Template Generation Error:", err);
+      Toast.show('حدث خطأ أثناء تحميل النموذج المرجعي', 'error');
+    }
+  },
+
+  async _importExcelData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        const tenantId = App.state.tenant.id;
+        let productsCount = 0;
+        let suppliersCount = 0;
+        let customersCount = 0;
+
+        // 1. Process Customers
+        const customersSheet = workbook.Sheets["العملاء"];
+        if (customersSheet) {
+          const customersJson = XLSX.utils.sheet_to_json(customersSheet);
+          for (const row of customersJson) {
+            const name = row["الاسم"]?.toString().trim();
+            if (!name) continue;
+            
+            const customer = {
+              tenantId,
+              name,
+              phone: row["الهاتف"]?.toString().trim() || '',
+              address: row["العنوان"]?.toString().trim() || '',
+              date: new Date().toISOString()
+            };
+            await window.db.add('customers', customer);
+            customersCount++;
+          }
+        }
+
+        // 2. Process Suppliers
+        const suppliersSheet = workbook.Sheets["الموردين"];
+        if (suppliersSheet) {
+          const suppliersJson = XLSX.utils.sheet_to_json(suppliersSheet);
+          for (const row of suppliersJson) {
+            const name = row["الاسم"]?.toString().trim();
+            if (!name) continue;
+            
+            const supplier = {
+              tenantId,
+              name,
+              phone: row["الهاتف"]?.toString().trim() || '',
+              address: row["العنوان"]?.toString().trim() || '',
+              taxNumber: row["الرقم الضريبي"]?.toString().trim() || '',
+              date: new Date().toISOString()
+            };
+            await window.db.add('suppliers', supplier);
+            suppliersCount++;
+          }
+        }
+
+        // 3. Process Categories and Products
+        const productsSheet = workbook.Sheets["الأصناف"];
+        if (productsSheet) {
+          const productsJson = XLSX.utils.sheet_to_json(productsSheet);
+          
+          // Get existing categories
+          const existingCategories = await window.db.getTenantData('categories', tenantId);
+          const categoryMap = {};
+          existingCategories.forEach(cat => categoryMap[cat.name.toLowerCase()] = cat.id);
+
+          for (const row of productsJson) {
+            const name = row["الاسم"]?.toString().trim();
+            if (!name) continue;
+
+            const categoryName = row["اسم الفئة"]?.toString().trim() || 'عام';
+            let categoryId = categoryMap[categoryName.toLowerCase()];
+            if (!categoryId) {
+              const newCat = {
+                id: window.db._uid(),
+                tenantId,
+                name: categoryName,
+                date: new Date().toISOString()
+              };
+              await window.db.put('categories', newCat);
+              categoryId = newCat.id;
+              categoryMap[categoryName.toLowerCase()] = categoryId;
+            }
+
+            const stockInit = parseFloat(row["رصيد المخزون الحالي"]) || 0;
+
+            const product = {
+              tenantId,
+              name,
+              barcode: row["الباركود"]?.toString().trim() || '',
+              categoryId,
+              price: parseFloat(row["سعر البيع"]) || 0,
+              cost: parseFloat(row["سعر الشراء"]) || 0,
+              stock: 0,
+              minStock: parseFloat(row["الحد الأدنى للمخزون"]) || 5,
+              unit: 'pcs',
+              date: new Date().toISOString()
+            };
+
+            const productId = await window.db.add('products', product);
+            productsCount++;
+
+            if (stockInit > 0) {
+              await window.db.updateProductStock(tenantId, productId, stockInit, 'in', 'adjustment', 'رصيد افتتاحي (استيراد إكسيل)');
+            }
+          }
+        }
+
+        Toast.show(`تم الاستيراد بنجاح! الأصناف: ${productsCount} | الموردين: ${suppliersCount} | العملاء: ${customersCount}`, 'success', 5000);
+        e.target.value = '';
+      } catch (err) {
+        console.error("Excel Import Error:", err);
+        Toast.show("حدث خطأ أثناء قراءة ملف الإكسيل، يرجى التأكد من صحة الملف والبيانات", "error");
+        e.target.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
   },
 
   // ══════════════════════════════════════════
