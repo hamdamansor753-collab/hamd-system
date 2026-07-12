@@ -2,221 +2,257 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta name="description" content="H.A.M.D – نظام إدارة المخازن الاحترافي المتكامل | مبيعات، مشتريات، مخزون، حسابات">
-  <meta name="theme-color" content="#6366f1">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="H.A.M.D">
-
-  <title>H.A.M.D — نظام إدارة المخازن</title>
-
-  <!-- PWA (only works on https/localhost) -->
-  <link rel="icon" type="image/jpeg" href="./favicon.jpg">
-  <link rel="manifest" href="./manifest.json">
-  <link rel="apple-touch-icon" href="./favicon.jpg">
-
-  <!-- Fonts & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
-  <!-- Barcode & QR Code Libraries -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
-  <!-- Exporting (Excel with styles) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-
-  <!-- Firebase v8 (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-
-  <!-- Styles -->
-  <link rel="stylesheet" href="./style.css?v=2.0.2">
-
-  <script>
-    window.addEventListener('error', (e) => {
-      console.error('Global error:', e.error || e.message);
-      const errDiv = document.createElement('div');
-      errDiv.style = "position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:999999;font-family:monospace";
-      errDiv.innerHTML = `<strong>JS Error:</strong> ${e.filename ? e.filename.split('/').pop() : ''}:${e.lineno}:${e.colno} - ${e.message}`;
-      if (document.body) document.body.appendChild(errDiv);
-      else window.addEventListener('DOMContentLoaded', () => document.body.appendChild(errDiv));
-    });
-  </script>
-
-  <!-- Preload key assets -->
-  <link rel="preload" href="./i18n.js?v=2.0.2" as="script">
-  <link rel="preload" href="./db.js?v=2.0.2" as="script">
-  <link rel="preload" href="./app.js?v=2.0.2" as="script">
-  <link rel="preload" href="./pages.js?v=2.0.2" as="script">
-</head>
-
-<body>
-
-<!-- ═══════════════════════════════════════════════════════════
-     AUTH SCREEN
-══════════════════════════════════════════════════════════════ -->
-<div id="auth-screen" style="display:none"></div>
-
-<!-- ═══════════════════════════════════════════════════════════
-     MAIN APP
-══════════════════════════════════════════════════════════════ -->
-<div id="app" style="display:none"></div>
-
-<!-- ═══════════════════════════════════════════════════════════
-     LOADING SPLASH
-══════════════════════════════════════════════════════════════ -->
-<div id="splash" style="
-  position: fixed; inset: 0;
-  background: #060b18;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  z-index: 99999;
-  gap: 24px;
-">
-  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.15) 0%, transparent 70%);pointer-events:none"></div>
-
-  <!-- Logo Animation -->
-  <div style="
-    width: 88px; height: 88px;
-    background: linear-gradient(135deg, #4f46e5, #6366f1, #0ea5e9);
-    border-radius: 24px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px; font-weight: 900; color: white;
-    box-shadow: 0 0 60px rgba(99,102,241,0.5), 0 0 120px rgba(99,102,241,0.2);
-    animation: pulse 1.5s ease-in-out infinite;
-    letter-spacing: 0;
-    font-family: 'Cairo', sans-serif;
-  ">H.A.M</div>
-
-  <div style="text-align:center">
-    <h1 style="font-family:'Cairo',sans-serif;font-size:28px;font-weight:900;color:#f1f5f9;letter-spacing:4px;margin:0">H.A.M.D</h1>
-    <p style="font-family:'Cairo',sans-serif;font-size:13px;color:#475569;margin:6px 0 0">نظام إدارة المخازن الاحترافي</p>
-  </div>
-
-  <!-- Loading Bar -->
-  <div style="width:200px;height:4px;background:#1e2d4a;border-radius:99px;overflow:hidden">
-    <div id="splash-progress" style="height:100%;background:linear-gradient(90deg,#4f46e5,#0ea5e9);border-radius:99px;width:0%;transition:width 0.3s ease"></div>
-  </div>
-  <p id="splash-msg" style="font-family:'Cairo',sans-serif;font-size:12px;color:#475569">جاري التهيئة...</p>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>H.A.M.D — المنصة السحابية لإدارة المخازن ونقاط البيع</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 60px rgba(99,102,241,0.5); }
-      50% { transform: scale(1.05); box-shadow: 0 0 80px rgba(99,102,241,0.7); }
+    :root {
+      --bg: #060b18;
+      --card: rgba(21, 31, 50, 0.6);
+      --border: rgba(99, 102, 241, 0.15);
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.35);
+      --secondary: #0ea5e9;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; scroll-behavior: smooth; }
+    body { background-color: var(--bg); color: var(--text); overflow-x: hidden; }
+
+    /* Background glow */
+    .glow-bg {
+      position: absolute; width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+      top: -200px; left: -200px; z-index: -1; pointer-events: none;
+    }
+    .glow-bg-right {
+      position: absolute; width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, transparent 70%);
+      top: 400px; right: -150px; z-index: -1; pointer-events: none;
+    }
+
+    /* Navbar */
+    nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 24px 80px; max-width: 1300px; margin: 0 auto;
+      position: relative; z-index: 10;
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-box {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: white; font-size: 18px;
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+    .logo-text { font-size: 20px; font-weight: 800; color: white; }
+    .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-weight: 500; font-size: 14px; transition: color 0.2s; }
+    .nav-links a:hover { color: white; }
+    .btn {
+      background: linear-gradient(135deg, var(--primary), #4f46e5); color: white;
+      text-decoration: none; padding: 10px 22px; border-radius: 10px;
+      font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s; border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3); opacity: 0.95; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text); box-shadow: none;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.08); box-shadow: none; }
+
+    /* Hero Section */
+    .hero {
+      max-width: 1100px; margin: 80px auto 120px; text-align: center;
+      padding: 0 24px; position: relative;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99,102,241,0.2);
+      padding: 6px 16px; border-radius: 99px; font-size: 13px; color: var(--primary);
+      margin-bottom: 24px; font-weight: 600;
+    }
+    .hero h1 { font-size: 52px; font-weight: 900; line-height: 1.25; color: white; margin-bottom: 20px; }
+    .hero h1 span {
+      background: linear-gradient(90deg, #818cf8, #38bdf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p { font-size: 18px; color: var(--text-muted); max-width: 750px; margin: 0 auto 40px; line-height: 1.6; }
+    .hero-actions { display: flex; justify-content: center; gap: 16px; }
+
+    /* Features Grid */
+    .features { max-width: 1200px; margin: 0 auto 120px; padding: 0 24px; }
+    .section-header { text-align: center; margin-bottom: 60px; }
+    .section-header h2 { font-size: 32px; font-weight: 800; color: white; margin-bottom: 12px; }
+    .section-header p { color: var(--text-muted); font-size: 15px; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .feature-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px; transition: all 0.3s; backdrop-filter: blur(12px);
+    }
+    .feature-card:hover { border-color: rgba(99, 102, 241, 0.4); transform: translateY(-4px); }
+    .feature-icon {
+      width: 48px; height: 48px; background: rgba(99, 102, 241, 0.1);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: var(--primary); margin-bottom: 20px;
+    }
+    .feature-card h3 { font-size: 18px; font-weight: 700; color: white; margin-bottom: 12px; }
+    .feature-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    /* Pricing Section */
+    .pricing { max-width: 1000px; margin: 0 auto 120px; padding: 0 24px; }
+    .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 800px; margin: 0 auto; }
+    .price-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 40px; position: relative; backdrop-filter: blur(12px);
+    }
+    .price-card.popular {
+      border-color: var(--primary);
+      box-shadow: 0 10px 40px rgba(99,102,241,0.15);
+    }
+    .price-card.popular::before {
+      content: 'الأكثر طلباً'; position: absolute; top: 16px; left: 16px;
+      background: var(--primary); color: white; padding: 4px 12px; font-size: 11px;
+      font-weight: 700; border-radius: 99px;
+    }
+    .price-title { font-size: 20px; font-weight: 800; color: white; margin-bottom: 8px; }
+    .price-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+    .price-amount { font-size: 38px; font-weight: 900; color: white; margin-bottom: 24px; display: flex; align-items: baseline; gap: 4px; }
+    .price-amount span { font-size: 14px; color: var(--text-muted); font-weight: 400; }
+    .price-features { list-style: none; margin-bottom: 32px; display: flex; flex-direction: column; gap: 12px; }
+    .price-features li { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 10px; }
+    .price-features li i { color: var(--secondary); font-size: 14px; }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 40px 24px; text-align: center; }
+    footer p { font-size: 13px; color: var(--text-muted); }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      nav { padding: 20px 24px; }
+      .nav-links { display: none; }
+      .hero h1 { font-size: 38px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; }
     }
   </style>
-</div>
+</head>
+<body>
 
-<!-- ═══════════════════════════════════════════════════════════
-     SCRIPTS
-══════════════════════════════════════════════════════════════ -->
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <div class="glow-bg"></div>
+  <div class="glow-bg-right"></div>
 
-<!-- H.A.M.D Core Scripts -->
-<script src="./i18n.js?v=2.0.2"></script>
-<script src="./db.js?v=2.0.2"></script>
-<script src="./app.js?v=2.0.2"></script>
-<script src="./pages.js?v=2.0.2"></script>
+  <!-- Navbar -->
+  <nav>
+    <div class="logo">
+      <div class="logo-box">H.A</div>
+      <div class="logo-text">H.A.M.D SaaS</div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">الميزات</a></li>
+      <li><a href="#pricing">الأسعار</a></li>
+      <li><a href="tests.html" target="_blank">فحص الجودة</a></li>
+    </ul>
+    <a href="app.html" class="btn"><i class="fa fa-sign-in-alt"></i> دخول النظام</a>
+  </nav>
 
-<script>
-// ── SPLASH SCREEN ANIMATION + BOOT ──
-(async function boot() {
-  const progress = document.getElementById('splash-progress');
-  const msg = document.getElementById('splash-msg');
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="badge"><i class="fa fa-rocket"></i> الإصدار 2.0 المتكامل حان الآن</div>
+    <h1>إدارة مخازنك ومبيعاتك <span>بمنتهى الاحترافية</span></h1>
+    <p>منصة سحابية متطورة لإدارة المخزون، الحسابات، نقاط البيع السريعة، وعلاقات الموردين والعملاء. نوفر لك عزل سحابي كامل لبياناتك ودقة متناهية لمساعدتك في بيع وخدمة عملائك.</p>
+    <div class="hero-actions">
+      <a href="app.html" class="btn"><i class="fa fa-arrow-left"></i> ابدأ تجربتك المجانية</a>
+      <a href="#pricing" class="btn btn-secondary">عرض خطط الأسعار</a>
+    </div>
+  </section>
 
-  const step = (pct, text) => {
-    progress.style.width = pct + '%';
-    msg.textContent = text;
-  };
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="section-header">
+      <h2>ميزات ذكية بنيت لنمو تجارتك</h2>
+      <p>كل ما تحتاجه لإدارة وتوسيع نطاق أعمالك في شاشة واحدة متكاملة وسهلة الاستخدام</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-cash-register"></i></div>
+        <h3>نقاط بيع ذكية (POS)</h3>
+        <p>نظام كاشير فائق السرعة يدعم الباركود والخصومات التلقائية وحساب الضرائب وحفظ الفواتير وطباعتها فورياً.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-warehouse"></i></div>
+        <h3>مخازن وجرد متعدد</h3>
+        <p>تتبع مخزونك عبر مستودعات متعددة مع تسويات الجرد وسجل حركات النقل الداخلي للسلع بكل دقة.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-chart-pie"></i></div>
+        <h3>تقارير مالية تفصيلية</h3>
+        <p>احصل على تقارير الأرباح والمبيعات والمصروفات اليومية والشهرية مع كشوفات حساب تفصيلية للعملاء والموردين.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-shield-halved"></i></div>
+        <h3>عزل بيانات سحابي</h3>
+        <p>حماية بنية السحابة (Multi-Tenant Isolation) تضمن أمان وعزل بيانات شركتك عن بقية المشتركين بالكامل.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-file-excel"></i></div>
+        <h3>استيراد وتصدير إكسيل</h3>
+        <p>اسحب وادمج كافة بيانات أصنافك وعملائك ومورديك دفعة واحدة بنقرة زر من خلال ملف إكسيل مرجعي مبسط.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><i class="fa fa-wifi"></i></div>
+        <h3>دعم العمل دون اتصال</h3>
+        <p>يواصل النظام عمله وحساب مبيعاتك حتى في حال انقطاع الإنترنت، مع مزامنة البيانات تلقائياً عند عودة الاتصال.</p>
+      </div>
+    </div>
+  </section>
 
-  step(10, 'تهيئة قاعدة البيانات...');
-  await new Promise(r => setTimeout(r, 200));
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <div class="section-header">
+      <h2>خطط تناسب جميع أحجام الأعمال</h2>
+      <p>باقات مرنة تناسب تطلعاتك مع إمكانية الترقية أو إلغاء الاشتراك في أي وقت</p>
+    </div>
+    <div class="pricing-grid">
+      <!-- Basic Plan -->
+      <div class="price-card">
+        <div class="price-title">الباقة الأساسية (Basic)</div>
+        <div class="price-desc">مناسبة للمتاجر الناشئة لتجربة إدارة الأصناف والبيع</div>
+        <div class="price-amount">$9 <span>/ شهرياً</span></div>
+        <ul class="price-features">
+          <li><i class="fa fa-check"></i> حد أقصى 15 صنف في المخازن</li>
+          <li><i class="fa fa-check"></i> حد أقصى 5 عملاء و 5 موردين</li>
+          <li><i class="fa fa-check"></i> تقارير مبيعات وجرد أساسية</li>
+          <li><i class="fa fa-check"></i> دعم فني عبر البريد</li>
+        </ul>
+        <a href="app.html" class="btn btn-secondary" style="width:100%; justify-content:center">ابدأ الآن مجاناً</a>
+      </div>
+      <!-- Pro Plan -->
+      <div class="price-card popular">
+        <div class="price-title">الباقة الاحترافية (Pro)</div>
+        <div class="price-desc">الحل المثالي للتجارة المتكاملة وإدارة المبيعات والمخازن المتعددة</div>
+        <div class="price-amount">$29 <span>/ شهرياً</span></div>
+        <ul class="price-features">
+          <li><i class="fa fa-check"></i> عدد أصناف غير محدود</li>
+          <li><i class="fa fa-check"></i> عدد عملاء وموردين غير محدود</li>
+          <li><i class="fa fa-check"></i> كشوفات حساب وتقارير محاسبية متقدمة</li>
+          <li><i class="fa fa-check"></i> إدارة صلاحيات ومستخدمين متعددة</li>
+          <li><i class="fa fa-check"></i> دعم فني ذو أولوية على مدار الساعة</li>
+        </ul>
+        <a href="app.html" class="btn" style="width:100%; justify-content:center"><i class="fa fa-arrow-up"></i> اشترك الآن في Pro</a>
+      </div>
+    </div>
+  </section>
 
-  step(30, 'تحميل البيانات...');
-  await new Promise(r => setTimeout(r, 200));
-
-  try {
-    step(60, 'تهيئة التطبيق...');
-    await App.init();
-
-    step(100, 'جاهز! ✓');
-    await new Promise(r => setTimeout(r, 400));
-
-    // Hide splash
-    const splash = document.getElementById('splash');
-    splash.style.opacity = '0';
-    splash.style.transition = 'opacity 0.5s ease';
-    setTimeout(() => splash.remove(), 500);
-  } catch (err) {
-    console.error('Boot error:', err);
-    msg.innerHTML = '<div style="background:#fff;color:red;padding:10px;text-align:left;direction:ltr;border-radius:4px">' + err.message + '<br>' + (err.stack || '') + '</div>';
-    msg.style.color = '#ef4444';
-    progress.style.background = '#ef4444';
-  }
-})();
-
-
-
-// ── SERVICE WORKER (only on https or localhost) ──
-function setupServiceWorker() {
-    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    if ('serviceWorker' in navigator && isSecure) {
-      navigator.serviceWorker.register('./sw.js').then(reg => {
-        console.log('SW registered:', reg.scope);
-      }).catch(err => console.warn('SW registration failed:', err));
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data.type === 'SYNC_START') {
-          Toast.show('جاري مزامنة البيانات...', 'info');
-        }
-      });
-    } else {
-      console.log('SW skipped (not on secure context) - IndexedDB offline storage still active');
-    }
-}
-
-window.addEventListener('unhandledrejection', (e) => {
-  console.error('Unhandled promise rejection:', e.reason);
-});
-
-// ── KEYBOARD SHORTCUTS ──
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey)) {
-    switch (e.key) {
-      case 'p': case 'P': e.preventDefault(); App.navigate('pos'); break;
-      case 'i': case 'I': e.preventDefault(); App.navigate('products'); break;
-      case 's': case 'S': e.preventDefault(); App.navigate('sales'); break;
-      case 'd': case 'D': e.preventDefault(); App.navigate('dashboard'); break;
-    }
-  }
-  if (e.key === 'Escape') Modal.closeAll();
-});
-
-// ── PREVENT CONTEXT MENU (OPTIONAL) ──
-// document.addEventListener('contextmenu', e => e.preventDefault());
-
-// ── PWA INSTALL PROMPT ──
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  window._deferredPrompt = e;
-  // Show subtle install hint after 30s
-  setTimeout(() => {
-    if (document.getElementById('toast-container')) {
-      Toast.show('💡 يمكنك تثبيت H.A.M.D كتطبيق على جهازك!', 'info', 6000);
-    }
-  }, 30000);
-});
-
-window.addEventListener('appinstalled', () => {
-  Toast.show('تم تثبيت H.A.M.D بنجاح! 🎉', 'success');
-  window._deferredPrompt = null;
-});
-</script>
+  <!-- Footer -->
+  <footer>
+    <p>© 2026 جميع الحقوق محفوظة لمنصة H.A.M.D SaaS السحابية لإدارة المخازن</p>
+  </footer>
 
 </body>
 </html>

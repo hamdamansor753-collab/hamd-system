@@ -2,7 +2,7 @@
   "name": "H.A.M.D - نظام إدارة المخازن",
   "short_name": "H.A.M.D",
   "description": "نظام احترافي متكامل لإدارة المخازن والمبيعات والمشتريات والحسابات",
-  "start_url": "/index.html",
+  "start_url": "/app.html",
   "display": "standalone",
   "background_color": "#0a0f1e",
   "theme_color": "#6366f1",
@@ -43,14 +43,14 @@
       "name": "نقطة البيع",
       "short_name": "POS",
       "description": "فتح شاشة البيع السريع",
-      "url": "/index.html#pos",
+      "url": "/app.html#pos",
       "icons": []
     },
     {
       "name": "المخزون",
       "short_name": "مخزون",
       "description": "عرض المخزون الحالي",
-      "url": "/index.html#inventory",
+      "url": "/app.html#inventory",
       "icons": []
     }
   ],

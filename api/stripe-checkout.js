@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       
       // In development, we can simulate checkout success by directing to success URL
       res.status(200).json({ 
-        url: `${baseDomain}/index.html#settings?success=true&mock_payment=true&tenant_id=${tenantId}`
+        url: `${baseDomain}/app.html#settings?success=true&mock_payment=true&tenant_id=${tenantId}`
       });
       return;
     }
@@ -60,8 +60,8 @@ module.exports = async (req, res) => {
         },
       ],
       mode: 'subscription',
-      success_url: `${baseDomain}/index.html#settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseDomain}/index.html#settings?success=false`,
+      success_url: `${baseDomain}/app.html#settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseDomain}/app.html#settings?success=false`,
       metadata: {
         tenantId: tenantId,
         tenantCode: tenantCode,
