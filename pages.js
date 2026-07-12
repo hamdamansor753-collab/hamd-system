@@ -2474,7 +2474,7 @@ const Pages = {
             <h2 style="font-size:20px;font-weight:800">لوحة التحكم العامة للمنصة</h2>
             <a href="tests.html" target="_blank" class="btn btn-secondary btn-sm" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:12px;padding:6px 12px"><i class="fa fa-vial"></i> تشغيل اختبارات الجودة والأمان</a>
           </div>
-          <div class="kpis-grid mb-24">
+          <div class="kpi-grid mb-24">
             <div class="kpi-card">
               <div class="kpi-value">${tenants.length}</div>
               <div class="kpi-label">إجمالي الشركات (Tenants)</div>
