@@ -729,13 +729,14 @@ input:checked + .slider::before { transform: translateX(-20px); background: whit
 }
 @media (max-width: 768px) {
   :root { --sidebar-width: 0px; }
-  #sidebar { width: 260px; transform: translateX(100%); }
-  #sidebar.mobile-open { transform: translateX(0); }
+  #sidebar { width: 260px; right: -260px; transform: none !important; }
+  #sidebar.mobile-open { right: 0; transform: none !important; }
   #main { margin-right: 0; }
   #page-content { padding: 12px; }
   #topbar { padding: 0 12px; gap: 8px; }
   .topbar-search { display: none !important; }
   .topbar-breadcrumb { display: none !important; }
+  .topbar-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
   .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
   .kpi-card { padding: 12px; }
   .kpi-value { font-size: 18px; }

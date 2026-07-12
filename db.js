@@ -85,15 +85,77 @@ class HamdDB {
 
   async login(usernameOrEmail, password) {
     let email = usernameOrEmail.trim();
-    if (!email.includes('@')) {
-      const snap = await this.db.collection('users').where('username', '==', email).limit(1).get();
-      if (snap.empty) return null;
-      email = snap.docs[0].data().email;
+    let isEmailInput = email.includes('@');
+    
+    let userDocData = null;
+    let userDocId = null;
+    
+    const usersCol = this.db.collection('users');
+    let snap;
+    try {
+      if (isEmailInput) {
+        snap = await usersCol.where('email', '==', email).limit(1).get();
+      } else {
+        snap = await usersCol.where('username', '==', email).limit(1).get();
+      }
+      if (!snap.empty) {
+        userDocData = snap.docs[0].data();
+        userDocId = snap.docs[0].id;
+        email = userDocData.email;
+      }
+    } catch (e) {
+      console.warn("Could not query user in Firestore", e);
     }
-    const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
-    const uid = userCredential.user.uid;
-    const userDoc = await this.db.collection('users').doc(uid).get();
-    return userDoc.exists ? userDoc.data() : null;
+
+    try {
+      const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
+      const uid = userCredential.user.uid;
+      const userDoc = await this.db.collection('users').doc(uid).get();
+      return userDoc.exists ? userDoc.data() : null;
+    } catch (authErr) {
+      console.warn("Auth failed, checking migration need:", authErr.code);
+      
+      if ((authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') && userDocData) {
+        if (userDocData.password === password) {
+          console.log("Password matches Firestore local record. Triggering auto-migration to Firebase Auth...");
+          
+          try {
+            const res = await fetch('/api/create-user', {
+              method: 'POST',
+              body: JSON.stringify({
+                email: email,
+                password: password,
+                username: userDocData.username,
+                name: userDocData.name,
+                role: userDocData.role,
+                tenantId: userDocData.tenantId
+              })
+            });
+            
+            if (res.ok) {
+              const result = await res.json();
+              if (userDocId !== result.userId) {
+                try {
+                  await usersCol.doc(userDocId).delete();
+                } catch (delErr) {
+                  console.warn("Failed to delete old user doc:", delErr);
+                }
+              }
+              const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
+              const userDoc = await this.db.collection('users').doc(result.userId).get();
+              return userDoc.exists ? userDoc.data() : null;
+            } else {
+              const errResult = await res.json();
+              throw new Error(errResult.error || "Migration failed");
+            }
+          } catch (migErr) {
+            console.error("Migration failed:", migErr);
+            throw authErr;
+          }
+        }
+      }
+      throw authErr;
+    }
   }
 
   async logoutUser() {
