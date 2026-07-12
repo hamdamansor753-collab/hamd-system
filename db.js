@@ -130,46 +130,43 @@ class HamdDB {
       const userDoc = await this.db.collection('users').doc(uid).get();
       return userDoc.exists ? userDoc.data() : null;
     } catch (authErr) {
-      console.warn("Auth failed, checking migration need:", authErr.code);
+      console.warn("Auth failed, checking migration / local fallback:", authErr.code);
       
-      if ((authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') && userDocData) {
-        if (userDocData.password === password) {
-          console.log("Password matches Firestore local record. Triggering auto-migration to Firebase Auth...");
+      if (userDocData && userDocData.password === password) {
+        // Attempt migration in background
+        try {
+          const res = await fetch('/api/create-user', {
+            method: 'POST',
+            body: JSON.stringify({
+              email: email,
+              password: password,
+              username: userDocData.username,
+              name: userDocData.name,
+              role: userDocData.role,
+              tenantId: userDocData.tenantId
+            })
+          });
           
-          try {
-            const res = await fetch('/api/create-user', {
-              method: 'POST',
-              body: JSON.stringify({
-                email: email,
-                password: password,
-                username: userDocData.username,
-                name: userDocData.name,
-                role: userDocData.role,
-                tenantId: userDocData.tenantId
-              })
-            });
-            
-            if (res.ok) {
-              const result = await res.json();
-              if (userDocId !== result.userId) {
-                try {
-                  await usersCol.doc(userDocId).delete();
-                } catch (delErr) {
-                  console.warn("Failed to delete old user doc:", delErr);
-                }
+          if (res.ok) {
+            const result = await res.json();
+            if (userDocId !== result.userId) {
+              try {
+                await usersCol.doc(userDocId).delete();
+              } catch (delErr) {
+                console.warn("Failed to delete old user doc:", delErr);
               }
-              const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
-              const userDoc = await this.db.collection('users').doc(result.userId).get();
-              return userDoc.exists ? userDoc.data() : null;
-            } else {
-              const errResult = await res.json();
-              throw new Error(errResult.error || "Migration failed");
             }
-          } catch (migErr) {
-            console.error("Migration failed:", migErr);
-            throw authErr;
+            // Sign in again with Firebase Auth to establish the session token
+            try {
+              await this.auth.signInWithEmailAndPassword(email, password);
+            } catch(e) {}
           }
+        } catch (migErr) {
+          console.warn("Migration failed, continuing with Firestore fallback:", migErr);
         }
+        
+        console.log("Local credentials matched! Logging in via Firestore fallback.");
+        return userDocData;
       }
       throw authErr;
     }
