@@ -251,30 +251,33 @@ const App = {
 
     await new Promise(r => setTimeout(r, 600)); // UX delay
 
-    const allUsers = await window.db.getAll('users');
-    const user = allUsers.find(u => u.username === username && u.password === password && u.active);
+    try {
+      const user = await window.db.getUserByCredentials(username, password);
 
-    if (!user) {
+      if (!user) {
+        errEl.style.display = 'flex';
+        errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> اسم المستخدم أو كلمة المرور غير صحيحة';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> تسجيل الدخول';
+        return;
+      }
+
+      const tenant = await window.db.get('tenants', user.tenantId);
+
+      this.state.tenant = tenant;
+      this.state.user = user;
+      this.saveSession(tenant, user);
+
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      this.startApp();
+    } catch (err) {
+      console.error("Login Error:", err);
       errEl.style.display = 'flex';
-      errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> اسم المستخدم أو كلمة المرور غير صحيحة';
+      errEl.innerHTML = '<i class="fa fa-exclamation-circle"></i> حدث خطأ أثناء الاتصال بالخادم';
       btn.disabled = false;
       btn.innerHTML = '<i class="fa fa-sign-in-alt"></i> تسجيل الدخول';
-      return;
     }
-
-    const allTenants = await window.db.getAll('tenants');
-    const userTenants = allTenants.filter(t => {
-      return window.db.getAll('users').then ? true : true; // We check by tenantId
-    });
-    const tenant = await window.db.get('tenants', user.tenantId);
-
-    this.state.tenant = tenant;
-    this.state.user = user;
-    this.saveSession(tenant, user);
-
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    this.startApp();
   },
 
   logout() {

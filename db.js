@@ -82,6 +82,16 @@ class HamdDB {
     return snap.docs.map(d => d.data());
   }
 
+  async getUserByCredentials(username, password) {
+    const snap = await this.db.collection('users')
+      .where('username', '==', username)
+      .where('password', '==', password)
+      .where('active', '==', true)
+      .limit(1)
+      .get();
+    return snap.empty ? null : snap.docs[0].data();
+  }
+
   async delete(store, id) {
     await this.db.collection(store).doc(id).delete();
   }

@@ -1,0 +1,62 @@
+// ═══════════════════════════════════════════════════════════
+// H.A.M.D — Firestore Security Rules
+// ═══════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------
+    // ⚠️ خيار الإنتاج: قواعد الحماية المشددة (تتطلب تفعيل Firebase Auth)
+    // -------------------------------------------------------------
+    
+    // دالة للتحقق من أن المستخدم قد سجل دخوله بالفعل عبر Firebase Auth
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    // دالة للحصول على بيانات المستخدم من مجموعة users باستخدام معرفه الفريد uid
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // دالة للتحقق من أن المستخدم ينتمي لنفس الشركة (tenantId) الخاصة بالمستند المراد قراءته/تعديله
+    function belongsToTenant(docData) {
+      return isLoggedIn() && getUserData().tenantId == docData.tenantId;
+    }
+
+    // دالة للتحقق من أن المستخدم ينتمي لشركة محددة
+    function isTenant(tenantId) {
+      return isLoggedIn() && getUserData().tenantId == tenantId;
+    }
+
+    // قواعد حماية مجموعة المستخدمين
+    match /users/{userId} {
+      allow read: if isLoggedIn() && (request.auth.uid == userId || getUserData().role == 'admin');
+      allow write: if isLoggedIn() && getUserData().role == 'admin';
+    }
+
+    // قواعد حماية الشركات
+    match /tenants/{tenantId} {
+      allow read: if isLoggedIn() && isTenant(tenantId);
+      allow write: if isLoggedIn() && isTenant(tenantId) && getUserData().role == 'admin';
+    }
+
+    // قواعد حماية باقي الجداول التشغيلية (الأصناف، الفواتير، العملاء، إلخ)
+    match /{collectionName}/{docId} {
+      allow read, write: if isLoggedIn() 
+        && belongsToTenant(resource.data) 
+        && belongsToTenant(request.resource.data);
+    }
+
+
+    // -------------------------------------------------------------
+    // 🛠️ خيار التطوير الحالي: مفتوح للجميع (مؤقت حتى تفعيل Firebase Auth)
+    // -------------------------------------------------------------
+    /*
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    */
+  }
+}
