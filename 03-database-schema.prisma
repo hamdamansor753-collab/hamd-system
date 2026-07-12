@@ -1,0 +1,359 @@
+// H.A.M.D — Warehouse Management SaaS
+// Prisma Schema Draft — Multi-Tenant (Shared Schema + tenantId)
+// ⚠️ هذا مسودة معمارية أولية — راجعها وعدّلها قبل أول migration، لا تشغّلها كما هي على الإنتاج
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // إجباري — لا SQLite حتى في التطوير المحلي (استخدم Docker)
+  url      = env("DATABASE_URL")
+}
+
+// ============ PLATFORM LEVEL (خارج نطاق أي Tenant) ============
+
+model Tenant {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique // subdomain أو مسار /dashboard/[slug]
+  status        TenantStatus @default(TRIAL)
+  planId        String
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id])
+  trialEndsAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  users         User[]
+  warehouses    Warehouse[]
+  products      Product[]
+  // ... باقي العلاقات تُضاف تلقائيًا في كل موديل عنده tenantId
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String   // Basic / Pro / Enterprise
+  priceMonthly    Decimal
+  maxWarehouses   Int
+  maxUsers        Int
+  maxInvoicesPerMonth Int
+  maxProducts     Int
+  tenants         Tenant[]
+}
+
+// ============ AUTH & RBAC (كل جدول عملياتي فيه tenantId) ============
+
+model User {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  email         String
+  passwordHash  String
+  fullName      String
+  roleId        String
+  role          Role     @relation(fields: [roleId], references: [id])
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String   // roles قابلة للتخصيص لكل tenant
+  name        String   // مدير، محاسب، أمين مخزن، مندوب، كاشير
+  permissions Permission[]
+  users       User[]
+
+  @@index([tenantId])
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  code   String @unique // e.g. "inventory.write", "pos.refund"
+  roles  Role[]
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String
+  action        String   // e.g. "stock_movement.create"
+  entityType    String
+  entityId      String
+  beforeValue   Json?
+  afterValue    Json?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+}
+
+// ============ INVENTORY ============
+
+model Category {
+  id        String     @id @default(cuid())
+  tenantId  String
+  name      String
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+
+  @@index([tenantId])
+}
+
+model Unit {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String // قطعة، كرتون، كيلو
+  products Product[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  sku           String
+  barcode       String?
+  name          String
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  unitId        String
+  unit          Unit     @relation(fields: [unitId], references: [id])
+  costPrice     Decimal
+  trackBatches  Boolean  @default(false)
+  trackExpiry   Boolean  @default(false)
+  minStockLevel Decimal  @default(0)
+  maxStockLevel Decimal?
+  isActive      Boolean  @default(true)
+  images        ProductImage[]
+  prices        ProductPrice[]
+  batches       ProductBatch[]
+  movements     StockMovement[]
+  balances      StockBalance[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, barcode])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  url       String
+}
+
+model ProductPrice {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  tier      PriceTier // RETAIL, WHOLESALE, VIP, SPECIAL
+  price     Decimal
+}
+
+enum PriceTier {
+  RETAIL
+  WHOLESALE
+  VIP
+  SPECIAL
+}
+
+model ProductBatch {
+  id            String    @id @default(cuid())
+  tenantId      String
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  batchNumber   String
+  expiryDate    DateTime?
+  movements     StockMovement[]
+
+  @@index([tenantId])
+}
+
+// ============ WAREHOUSES & LOCATIONS ============
+
+model Warehouse {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  name      String
+  address   String?
+  locations Location[]
+  movements StockMovement[]
+  balances  StockBalance[]
+
+  @@index([tenantId])
+}
+
+model Location {
+  id          String    @id @default(cuid())
+  tenantId    String
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  rack        String?
+  shelf       String?
+  bin         String?
+  movements   StockMovement[]
+
+  @@index([tenantId])
+}
+
+// ============ ⭐ STOCK LEDGER (المصدر الوحيد للحقيقة) ============
+
+enum MovementType {
+  PURCHASE_IN
+  SALE_OUT
+  RETURN_IN
+  RETURN_OUT
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  INITIAL_STOCK
+}
+
+model StockMovement {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  productId          String
+  product            Product      @relation(fields: [productId], references: [id])
+  warehouseId        String
+  warehouse          Warehouse    @relation(fields: [warehouseId], references: [id])
+  locationId         String?
+  location           Location?    @relation(fields: [locationId], references: [id])
+  batchId            String?
+  batch              ProductBatch? @relation(fields: [batchId], references: [id])
+  type               MovementType
+  quantity           Decimal      // دائمًا موجب؛ الاتجاه يحدده type
+  unitCost           Decimal
+  referenceType      String       // "SalesInvoice" | "PurchaseInvoice" | "Transfer" | "StockCount" ...
+  referenceId        String
+  performedByUserId  String
+  notes              String?
+  createdAt          DateTime     @default(now())
+  // ⚠️ عمدًا لا يوجد updatedAt — السجل immutable، أي تصحيح يتم بحركة عكسية جديدة
+
+  @@index([tenantId, productId, warehouseId])
+  @@index([tenantId, referenceType, referenceId])
+}
+
+// جدول Cache فقط — يُعاد حسابه دوريًا من StockMovement، وليس مصدر الحقيقة
+model StockBalance {
+  id             String    @id @default(cuid())
+  tenantId       String
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id])
+  warehouseId    String
+  warehouse      Warehouse @relation(fields: [warehouseId], references: [id])
+  batchId        String?
+  quantity       Decimal
+  lastMovementId String
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([tenantId, productId, warehouseId, batchId])
+}
+
+// ============ SALES / PURCHASES / POS ============
+
+model Customer {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  phone        String?
+  creditLimit  Decimal  @default(0)
+  balance      Decimal  @default(0) // كاش من كشف الحساب — مصدر الحقيقة هو Ledger مالي منفصل (خارج نطاق هذا الملف)
+  priceTier    PriceTier @default(RETAIL)
+  invoices     SalesInvoice[]
+
+  @@index([tenantId])
+}
+
+model Supplier {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  phone    String?
+  invoices PurchaseInvoice[]
+
+  @@index([tenantId])
+}
+
+model SalesInvoice {
+  id           String   @id @default(cuid())
+  tenantId     String
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  warehouseId  String
+  status       InvoiceStatus @default(CONFIRMED)
+  items        SalesInvoiceItem[]
+  totalAmount  Decimal
+  paidAmount   Decimal  @default(0)
+  createdByUserId String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model SalesInvoiceItem {
+  id         String       @id @default(cuid())
+  invoiceId  String
+  invoice    SalesInvoice @relation(fields: [invoiceId], references: [id])
+  productId  String
+  quantity   Decimal
+  unitPrice  Decimal
+  discount   Decimal      @default(0)
+}
+
+model PurchaseInvoice {
+  id           String   @id @default(cuid())
+  tenantId     String
+  supplierId   String
+  supplier     Supplier @relation(fields: [supplierId], references: [id])
+  warehouseId  String
+  status       InvoiceStatus @default(CONFIRMED)
+  totalAmount  Decimal
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+  RETURNED
+}
+
+// ============ FINANCE (مختصر — تفصيل كامل في 09-finance-module.md) ============
+
+model Treasury {
+  id        String  @id @default(cuid())
+  tenantId  String
+  name      String
+  balance   Decimal @default(0)
+
+  @@index([tenantId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  treasuryId  String
+  amount      Decimal
+  category    String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
