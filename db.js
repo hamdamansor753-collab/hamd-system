@@ -44,6 +44,7 @@ class HamdDB {
         
         // Seed demo data if database is empty
         await this._seedDemoData();
+        await this.ensureSuperAdmin();
         
         resolve(this);
       } catch (err) {
@@ -51,6 +52,22 @@ class HamdDB {
         reject(err);
       }
     });
+  }
+
+  async ensureSuperAdmin() {
+    try {
+      const snap = await this.db.collection('users').where('username', '==', 'superadmin').limit(1).get();
+      if (snap.empty) {
+        const tenant0 = { id: 'T000', code: 'saas-owner', name: 'إدارة منصة H.A.M.D', plan: 'pro', currency: 'EGP', taxRate: 0, address: 'المكتب الرئيسي', phone: '010', logo: 'S', color: '#10b981', createdAt: new Date().toISOString() };
+        await this.put('tenants', tenant0);
+        
+        const superUser = { id: 'U005', tenantId: 'T000', username: 'superadmin', password: 'superadmin123', name: 'مدير المنصة العام', email: 'superadmin@hamd.com', role: 'super-admin', active: true };
+        await this.put('users', superUser);
+        console.log("Superadmin user and tenant seeded successfully");
+      }
+    } catch (e) {
+      console.warn("ensureSuperAdmin failed:", e);
+    }
   }
 
   // ── Core CRUD ──
