@@ -1,5 +1,5 @@
 // H.A.M.D Service Worker - Offline Support
-const CACHE_NAME = 'hamd-v1.0.3';
+const CACHE_NAME = 'hamd-v2.0.1';
 const OFFLINE_URL = '/index.html';
 
 const ASSETS_TO_CACHE = [
