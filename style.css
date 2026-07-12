@@ -63,7 +63,7 @@ body.light-theme {
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { direction: rtl; font-size: 15px; scroll-behavior: smooth; }
+html { direction: rtl; font-size: 15px; scroll-behavior: smooth; overflow-x: hidden; }
 
 body {
   font-family: 'Cairo', 'Tajawal', sans-serif;
